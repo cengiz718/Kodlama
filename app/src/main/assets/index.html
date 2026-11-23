@@ -3,81 +3,60 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mobil TV & Radyo</title>
+<title>Kurye Takip & Sipariş Yönetimi</title>
 <style>
-  body{font-family:system-ui, sans-serif;margin:0;background:#090d16;color:#f8fafc;padding:12px;}
-  .glass{background:rgba(30,41,59,0.78);border:1px solid rgba(148,163,184,0.2);border-radius:16px;padding:12px;}
-  video{width:100%;max-height:220px;background:#000;border-radius:12px;}
-  .row{display:flex;gap:8px;margin:10px 0;}
-  input{flex:1;padding:8px;border-radius:10px;border:1px solid #334155;background:#0f172a;color:#fff;}
-  button{padding:8px 12px;border:none;border-radius:10px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font-weight:700;}
-  button:focus{outline:3px solid #38bdf8;}
-  .ch{padding:10px;margin-bottom:6px;background:#0f172a;border-radius:10px;display:flex;justify-content:space-between;align-items:center;}
-  .ch span{flex:1;}
-  .ch small{margin-left:8px;color:#38bdf8;}
-  .action-btn{background:transparent;border:none;color:#38bdf8;font-size:14px;padding:0 4px;}
+*{box-sizing:border-box}
+body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:0;padding:14px;background:radial-gradient(circle at 12% 8%,rgba(56,189,248,.18),transparent 40%),radial-gradient(circle at 88% 15%,rgba(168,85,247,.22),transparent 45%),radial-gradient(circle at 50% 100%,rgba(236,72,153,.12),transparent 50%),#070b14;color:#f8fafc;min-height:100vh}
+.hero{display:flex;align-items:center;gap:12px;padding:14px;border-radius:18px;margin-bottom:14px;background:linear-gradient(135deg,rgba(30,41,59,.88),rgba(15,23,42,.92));border:1px solid rgba(125,211,252,.25);box-shadow:0 12px 28px rgba(0,0,0,.4)}
+.hero-icon{width:46px;height:46px;min-width:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#2563eb,#9333ea,#ec4899);box-shadow:0 6px 18px rgba(124,58,237,.45);color:#fff}
+.hero-title{margin:0;font-size:16px;font-weight:800;letter-spacing:.2px;background:linear-gradient(90deg,#7dd3fc,#c084fc,#f9a8d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hero-sub{margin:3px 0 0 0;font-size:12px;color:#94a3b8}
+.glass{background:rgba(20,29,49,.82);backdrop-filter:blur(14px);border:1px solid rgba(148,163,184,.2);border-radius:16px;padding:14px;margin-bottom:14px;box-shadow:0 10px 24px rgba(0,0,0,.35)}
+.sec-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.sec-title{display:flex;align-items:center;gap:8px;margin:0;font-size:14px;font-weight:700;color:#e2e8f0}
+.pill{font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px;background:rgba(56,189,248,.16);border:1px solid rgba(56,189,248,.35);color:#7dd3fc}
+label{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:#93c5fd;margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px}
+input,textarea,select{width:100%;padding:11px 12px;margin-bottom:11px;border-radius:12px;border:1px solid rgba(148,163,184,.25);background:rgba(9,14,26,.92);color:#f8fafc;font-size:13px}
+input:focus,textarea:focus,select:focus{outline:none;border-color:#38bdf8}
+textarea{min-height:74px;resize:vertical}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap}
+.btn{flex:1;min-width:105px;display:inline-flex;align-items:center;justify-content:center;gap:6px;border:none;border-radius:12px;padding:11px 12px;font-weight:700;font-size:12px;color:#fff;background:linear-gradient(135deg,#2563eb,#7c3aed);cursor:pointer;box-shadow:0 4px 14px rgba(37,99,235,.35)}
+.btn.green{background:linear-gradient(135deg,#059669,#10b981);box-shadow:0 4px 14px rgba(16,185,129,.3)}
+.btn.amber{background:linear-gradient(135deg,#d97706,#ea580c);box-shadow:0 4px 14px rgba(234,88,12,.3)}
+.btn.danger{background:linear-gradient(135deg,#dc2626,#be123c)}
+.btn.ghost{background:rgba(51,65,85,.85);box-shadow:none;border:1px solid rgba(148,163,184,.22)}
+svg.ico{width:16px;height:16px;flex-shrink:0;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+svg.ico-lg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.order{background:rgba(11,17,32,.92);border:1px solid rgba(148,163,184,.2);border-left:4px solid #38bdf8;padding:11px;border-radius:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px}
 </style>
 </head>
 <body>
-<div class="glass">
-  <video id="player" controls autoplay></video>
-  <div id="nowPlaying" style="margin:6px 0;font-size:13px;color:#38bdf8;">Kanal seçin</div>
-  <div class="row">
-    <input id="m3uUrl" placeholder="Yayın veya M3U URL yapıştır..." />
-    <button onclick="addStream()">Ekle</button>
-  </div>
-  <div id="channels"></div>
+<div class="hero">
+<div class="hero-icon" id="heroOrdIcon"></div>
+<div>
+<h2 class="hero-title">Sipariş & Kurye Takip</h2>
+<p class="hero-sub">Kayıt oluşturma, durum güncelleme ve hızlı silme</p>
 </div>
+</div>
+
+<div class="glass">
+<div class="sec-head">
+<h3 class="sec-title"><span id="ordHeadIcon"></span> Yeni Kayıt</h3>
+<span class="pill" id="ordCount">0 KAYIT</span>
+</div>
+<input id="custName" placeholder="Müşteri / Ürün Adı" />
+<input id="orderNote" placeholder="Adet / Tutar / Not" />
+<select id="orderStatus">
+<option value="Hazırlanıyor">Hazırlanıyor</option>
+<option value="Kargoda">Kargoda</option>
+<option value="Teslim Edildi">Teslim Edildi</option>
+</select>
+<button class="btn" style="width:100%;" onclick="addOrder()"><span id="ordAddIcon"></span><span>Kayıt Ekle</span></button>
+<div id="ordersList" style="margin-top:12px;"></div>
+</div>
+
 <script>
-  let channels = JSON.parse(localStorage.getItem("tv_channels") || "[]");
-  if (!channels.length) {
-    channels = [
-      { title: "Örnek Radyo Yayını", url: "" },
-      { title: "Örnek TV Akışı", url: "" }
-    ];
-  }
-  function renderCh() {
-    localStorage.setItem("tv_channels", JSON.stringify(channels));
-    document.getElementById("channels").innerHTML = channels.map((c,i)=>
-      `<button class="ch" style="width:100%;text-align:left;" onclick="playCh(${i})">
-        <span>${c.title}</span>
-        <div>
-          <small>Oynat</small>
-          <button class="action-btn" onclick="event.stopPropagation();editCh(${i})">✏️</button>
-          <button class="action-btn" onclick="event.stopPropagation();deleteCh(${i})">🗑️</button>
-        </div>
-      </button>`
-    ).join("");
-  }
-  function playCh(i){
-    const c=channels[i];
-    document.getElementById("nowPlaying").innerText="Yayın: "+c.title;
-    if(c.url){
-      const v=document.getElementById("player");
-      v.src=c.url;
-      v.play().catch(()=>{});
-    }else if(window.AndroidBridge){
-      window.AndroidBridge.toast("Önce yayın URL'si ekleyin");
-    }
-  }
-  function addStream(){
-    const u=document.getElementById("m3uUrl").value.trim();
-    if(!u)return;
-    channels.unshift({title:"Özel Yayın "+(channels.length+1),url:u});
-    document.getElementById("m3uUrl").value="";
-    renderCh();
-  }
-  function editCh(i){
-    const newTitle=prompt("Kanal adını değiştir:",channels[i].title);
-    if(newTitle!==null)channels[i].title=newTitle.trim()||channels[i].title;
-    const newUrl=prompt("URL'i değiştir:",channels[i].url);
-    if(newUrl!==null)channels[i].url=newUrl.trim();
-    renderCh();
-  }
-  function deleteCh(i){
-    if(confirm("Bu kanalı silmek istediğinize emin misiniz?")){channels.splice(i,1);renderCh();}
-  }
-  renderCh();
-</script>
+const ICONS={
+spark:'<svg class="ico" viewBox="0 0 24 24"><path d="M12 3l1.9 5.8L20 10.7l-6.1
 </body>
 </html>
