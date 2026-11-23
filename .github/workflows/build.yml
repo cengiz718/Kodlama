@@ -78,8 +78,8 @@ jobs:
                   applicationId = "com.cengiz718.apkuetici"
                   minSdk = 24
                   targetSdk = 34
-                  versionCode = 5
-                  versionName = "5.0"
+                  versionCode = 6
+                  versionName = "6.0"
               }
 
               buildTypes {
@@ -451,7 +451,7 @@ jobs:
                   mutableStateListOf(
                       ChatMessage(
                           "assistant",
-                          "AI Studio APK Üretici v5.0 hazır! Anahtarsız yapay zeka ile uygulama üret, 'Canlı Önizleme' sekmesinde test et ve tek tuşla GitHub'a yazıp APK + Release olarak derlet."
+                          "AI Studio APK Üretici v6.0 hazır! Anahtarsız yapay zeka ile uygulama üret, 'Canlı Önizleme' sekmesinde test et ve tek tuşla GitHub'a yazıp APK + Release olarak derlet."
                       )
                   )
               }}
@@ -464,7 +464,7 @@ jobs:
                                   Column {{
                                       Text("AI Studio APK Üretici", fontWeight = FontWeight.Bold, fontSize = 17.sp)
                                       Text(
-                                          if (ghRepo.isNotBlank()) "Anahtarsız AI • $ghOwner/$ghRepo" else "Anahtarsız AI • Canlı Önizleme",
+                                          if (ghRepo.isNotBlank()) "Anahtarsız AI • " + ghOwner + "/" + ghRepo else "Anahtarsız AI • Canlı Önizleme",
                                           fontSize = 11.sp,
                                           color = Color(0xFF94A3B8)
                                       )
@@ -629,7 +629,7 @@ jobs:
                                       IconButton(onClick = {{ previewVersion++ }}, modifier = Modifier.size(32.dp)) {{
                                           Icon(Icons.Default.Refresh, contentDescription = "Yenile", tint = Color(0xFF38BDF8), modifier = Modifier.size(18.dp))
                                       }}
-                                      Text("Önizleme: $appTitle", color = Color(0xFF38BDF8), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                      Text("Önizleme: " + appTitle, color = Color(0xFF38BDF8), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                   }}
                                   Button(
                                       onClick = {{
@@ -906,7 +906,7 @@ jobs:
                       4. Açıklama yazma, doğrudan HTML kodunu ver.
                   \"\"\".trimIndent()
 
-                  val userMessage = "Mevcut Şablon / Kod:\\n$currentHtml\\n\\nİstenen Güncelleme / Uygulama: $userPrompt"
+                  val userMessage = "Mevcut Şablon / Kod:\\n" + currentHtml + "\\n\\nİstenen Güncelleme / Uygulama: " + userPrompt
 
                   val client = OkHttpClient.Builder()
                       .connectTimeout(60, TimeUnit.SECONDS)
@@ -955,18 +955,18 @@ jobs:
                   }}
 
                   try {{
-                      val encoded = Uri.encode("$systemPrompt\\n\\n$userMessage")
+                      val encoded = Uri.encode(systemPrompt + "\\n\\n" + userMessage)
                       val getReq = Request.Builder()
-                          .url("https://text.pollinations.ai/$encoded")
+                          .url("https://text.pollinations.ai/" + encoded)
                           .get()
                           .build()
                       client.newCall(getReq).execute().use {{ resp ->
                           val bodyStr = resp.body?.string() ?: ""
                           if (resp.isSuccessful && bodyStr.isNotBlank()) return@withContext bodyStr
-                          return@withContext "AI yanıt vermedi (${{resp.code}}). Lütfen tekrar dene."
+                          return@withContext "AI yanıt vermedi (" + resp.code + "). Lütfen tekrar dene."
                       }}
                   }} catch (e: Exception) {{
-                      "Bağlantı Hatası: ${{e.message}}"
+                      "Bağlantı Hatası: " + e.message
                   }}
               }}
 
@@ -978,8 +978,8 @@ jobs:
           private fun getFileSha(client: OkHttpClient, token: String, owner: String, repo: String, path: String, branch: String): String? {{
               val cleanPath = path.trimStart('/')
               val req = Request.Builder()
-                  .url("https://api.github.com/repos/$owner/$repo/contents/$cleanPath?ref=$branch")
-                  .addHeader("Authorization", "Bearer $token")
+                  .url("https://api.github.com/repos/" + owner + "/" + repo + "/contents/" + cleanPath + "?ref=" + branch)
+                  .addHeader("Authorization", "Bearer " + token)
                   .addHeader("Accept", "application/vnd.github+json")
                   .build()
               client.newCall(req).execute().use {{ resp ->
@@ -1003,22 +1003,22 @@ jobs:
               val sha = getFileSha(client, token, owner, repo, cleanPath, branch)
 
               val payload = JSONObject().apply {{
-                  put("message", "AI Studio APK: $cleanPath")
+                  put("message", "AI Studio APK: " + cleanPath)
                   put("content", b64)
                   put("branch", branch)
                   if (!sha.isNullOrBlank()) put("sha", sha)
               }}
 
               val req = Request.Builder()
-                  .url("https://api.github.com/repos/$owner/$repo/contents/$cleanPath")
-                  .addHeader("Authorization", "Bearer $token")
+                  .url("https://api.github.com/repos/" + owner + "/" + repo + "/contents/" + cleanPath)
+                  .addHeader("Authorization", "Bearer " + token)
                   .addHeader("Accept", "application/vnd.github+json")
                   .put(payload.toString().toRequestBody("application/json".toMediaType()))
                   .build()
 
               client.newCall(req).execute().use {{ resp ->
-                  return if (resp.isSuccessful) "Yüklendi: $cleanPath"
-                  else "Hata ($cleanPath - ${{resp.code}}): ${{resp.body?.string()}}"
+                  return if (resp.isSuccessful) "Yüklendi: " + cleanPath
+                  else "Hata (" + cleanPath + " - " + resp.code + "): " + (resp.body?.string() ?: "")
               }}
           }}
 
@@ -1034,7 +1034,7 @@ jobs:
               val logs = mutableListOf<String>()
 
               val workflowYml = \"\"\"
-                  name: Build WebView APK & Release
+                  name: Build WebView APK and Release
                   on:
                     push:
                       branches: [ main, master ]
@@ -1102,7 +1102,7 @@ jobs:
                             <?xml version="1.0" encoding="utf-8"?>
                             <manifest xmlns:android="http://schemas.android.com/apk/res/android">
                                 <uses-permission android:name="android.permission.INTERNET" />
-                                <application android:allowBackup="true" android:usesCleartextTraffic="true" android:label="$appName" android:theme="@android:style/Theme.Material.NoActionBar">
+                                <application android:allowBackup="true" android:usesCleartextTraffic="true" android:label="GeneratedWebViewApp" android:theme="@android:style/Theme.Material.NoActionBar">
                                     <activity android:name=".MainActivity" android:exported="true">
                                         <intent-filter>
                                             <action android:name="android.intent.action.MAIN" />
@@ -1147,7 +1147,7 @@ jobs:
                           uses: softprops/action-gh-release@v2
                           with:
                             tag_name: v${{'$'}} {{{{ github.run_number }}}}
-                            name: "$appName v${{'$'}} {{{{ github.run_number }}}}"
+                            name: "WebViewApp v${{'$'}} {{{{ github.run_number }}}}"
                             files: app/build/outputs/apk/debug/app-debug.apk
               \"\"\".trimIndent()
 
@@ -1156,14 +1156,14 @@ jobs:
 
               val dispatchPayload = JSONObject().put("ref", branch)
               val dispatchReq = Request.Builder()
-                  .url("https://api.github.com/repos/$owner/$repo/actions/workflows/build.yml/dispatches")
-                  .addHeader("Authorization", "Bearer $token")
+                  .url("https://api.github.com/repos/" + owner + "/" + repo + "/actions/workflows/build.yml/dispatches")
+                  .addHeader("Authorization", "Bearer " + token)
                   .addHeader("Accept", "application/vnd.github+json")
                   .post(dispatchPayload.toString().toRequestBody("application/json".toMediaType()))
                   .build()
               client.newCall(dispatchReq).execute().close()
 
-              logs.add("Derleme ve Release başlatıldı: https://github.com/$owner/$repo/releases")
+              logs.add("Derleme ve Release başlatıldı: https://github.com/" + owner + "/" + repo + "/releases")
               logs.joinToString("\\n")
           }}
 
@@ -1177,24 +1177,24 @@ jobs:
               val client = ghClient()
               val cleanPath = path.trimStart('/')
               val sha = getFileSha(client, token, owner, repo, cleanPath, branch)
-                  ?: return@withContext "Dosya bulunamadı: $cleanPath"
+                  ?: return@withContext "Dosya bulunamadı: " + cleanPath
 
               val payload = JSONObject().apply {{
-                  put("message", "Delete $cleanPath via AI Studio APK")
+                  put("message", "Delete " + cleanPath + " via AI Studio APK")
                   put("sha", sha)
                   put("branch", branch)
               }}
 
               val req = Request.Builder()
-                  .url("https://api.github.com/repos/$owner/$repo/contents/$cleanPath")
-                  .addHeader("Authorization", "Bearer $token")
+                  .url("https://api.github.com/repos/" + owner + "/" + repo + "/contents/" + cleanPath)
+                  .addHeader("Authorization", "Bearer " + token)
                   .addHeader("Accept", "application/vnd.github+json")
                   .delete(payload.toString().toRequestBody("application/json".toMediaType()))
                   .build()
 
               client.newCall(req).execute().use {{ resp ->
-                  if (resp.isSuccessful) "Silindi: $cleanPath"
-                  else "Silme hatası (${{resp.code}}): ${{resp.body?.string()}}"
+                  if (resp.isSuccessful) "Silindi: " + cleanPath
+                  else "Silme hatası (" + resp.code + "): " + (resp.body?.string() ?: "")
               }}
           }}
 
@@ -1205,22 +1205,22 @@ jobs:
           ): String = withContext(Dispatchers.IO) {{
               val client = ghClient()
               val runsReq = Request.Builder()
-                  .url("https://api.github.com/repos/$owner/$repo/actions/runs?per_page=1")
-                  .addHeader("Authorization", "Bearer $token")
+                  .url("https://api.github.com/repos/" + owner + "/" + repo + "/actions/runs?per_page=1")
+                  .addHeader("Authorization", "Bearer " + token)
                   .addHeader("Accept", "application/vnd.github+json")
                   .build()
 
               client.newCall(runsReq).execute().use {{ resp ->
                   val body = resp.body?.string() ?: ""
-                  if (!resp.isSuccessful) return@withContext "İş akışı okunamadı (${{resp.code}}): $body"
+                  if (!resp.isSuccessful) return@withContext "İş akışı okunamadı (" + resp.code + "): " + body
                   val runs = JSONObject(body).optJSONArray("workflow_runs")
                   if (runs == null || runs.length() == 0) {{
-                      return@withContext "Henüz derleme kaydı yok: https://github.com/$owner/$repo/actions"
+                      return@withContext "Henüz derleme kaydı yok: https://github.com/" + owner + "/" + repo + "/actions"
                   }}
                   val latest = runs.getJSONObject(0)
                   val status = latest.optString("status", "unknown")
                   val conclusion = latest.optString("conclusion", "-")
-                  "Son Derleme: $status ($conclusion)\\nReleases: https://github.com/$owner/$repo/releases\\nActions: ${{latest.optString("html_url", "")}}"
+                  "Son Derleme: " + status + " (" + conclusion + ")\\nReleases: https://github.com/" + owner + "/" + repo + "/releases\\nActions: " + latest.optString("html_url", "")
               }}
           }}
           """
