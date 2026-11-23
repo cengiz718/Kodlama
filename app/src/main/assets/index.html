@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mobil TV & Radyo</title>
+<style>
+  body{font-family:system-ui, sans-serif;margin:0;background:#090d16;color:#f8fafc;padding:12px;}
+  .glass{background:rgba(30,41,59,0.78);border:1px solid rgba(148,163,184,0.2);border-radius:16px;padding:12px;}
+  video{width:100%;max-height:220px;background:#000;border-radius:12px;}
+  .row{display:flex;gap:8px;margin:10px 0;}
+  input{flex:1;padding:8px;border-radius:10px;border:1px solid #334155;background:#0f172a;color:#fff;}
+  button{padding:8px 12px;border:none;border-radius:10px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font-weight:700;}
+  button:focus{outline:3px solid #38bdf8;}
+  .ch{padding:10px;margin-bottom:6px;background:#0f172a;border-radius:10px;display:flex;justify-content:space-between;align-items:center;}
+  .ch span{flex:1;}
+  .ch small{margin-left:8px;color:#38bdf8;}
+  .action-btn{background:transparent;border:none;color:#38bdf8;font-size:14px;padding:0 4px;}
+</style>
+</head>
+<body>
+<div class="glass">
+  <video id="player" controls autoplay></video>
+  <div id="nowPlaying" style="margin:6px 0;font-size:13px;color:#38bdf8;">Kanal seçin</div>
+  <div class="row">
+    <input id="m3uUrl" placeholder="Yayın veya M3U URL yapıştır..." />
+    <button onclick="addStream()">Ekle</button>
+  </div>
+  <div id="channels"></div>
+</div>
+<script>
+  let channels = JSON.parse(localStorage.getItem("tv_channels") || "[]");
+  if (!channels.length) {
+    channels = [
+      { title: "Örnek Radyo Yayını", url: "" },
+      { title: "Örnek TV Akışı", url: "" }
+    ];
+  }
+  function renderCh() {
+    localStorage.setItem("tv_channels", JSON.stringify(channels));
+    document.getElementById("channels").innerHTML = channels.map((c,i)=>
+      `<button class="ch" style="width:100%;text-align:left;" onclick="playCh(${i})">
+        <span>${c.title}</span>
+        <div>
+          <small>Oynat</small>
+          <button class="action-btn" onclick="event.stopPropagation();editCh(${i})">✏️</button>
+          <button class="action-btn" onclick="event.stopPropagation();deleteCh(${i})">🗑️</button>
+        </div>
+      </button>`
+    ).join("");
+  }
+  function playCh(i){
+    const c=channels[i];
+    document.getElementById("nowPlaying").innerText="Yayın: "+c.title;
+    if(c.url){
+      const v=document.getElementById("player");
+      v.src=c.url;
+      v.play().catch(()=>{});
+    }else if(window.AndroidBridge){
+      window.AndroidBridge.toast("Önce yayın URL'si ekleyin");
+    }
+  }
+  function addStream(){
+    const u=document.getElementById("m3uUrl").value.trim();
+    if(!u)return;
+    channels.unshift({title:"Özel Yayın "+(channels.length+1),url:u});
+    document.getElementById("m3uUrl").value="";
+    renderCh();
+  }
+  function editCh(i){
+    const newTitle=prompt("Kanal adını değiştir:",channels[i].title);
+    if(newTitle!==null)channels[i].title=newTitle.trim()||channels[i].title;
+    const newUrl=prompt("URL'i değiştir:",channels[i].url);
+    if(newUrl!==null)channels[i].url=newUrl.trim();
+    renderCh();
+  }
+  function deleteCh(i){
+    if(confirm("Bu kanalı silmek istediğinize emin misiniz?")){channels.splice(i,1);renderCh();}
+  }
+  renderCh();
+</script>
+</body>
+</html>
