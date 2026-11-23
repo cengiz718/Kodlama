@@ -1,9 +1,12 @@
-name: Build ChatGPT APK Generator
+name: Build AI Studio APK Generator
 
 on:
   push:
     branches: [ main, master ]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -43,7 +46,7 @@ jobs:
                   mavenCentral()
               }
           }
-          rootProject.name = "ChatGPTAPKUretici"
+          rootProject.name = "AIStudioAPKUretici"
           include(":app")
           EOF
 
@@ -75,8 +78,8 @@ jobs:
                   applicationId = "com.cengiz718.apkuetici"
                   minSdk = 24
                   targetSdk = 34
-                  versionCode = 1
-                  versionName = "1.0"
+                  versionCode = 2
+                  versionName = "2.0"
               }
 
               buildTypes {
@@ -122,7 +125,8 @@ jobs:
 
               <application
                   android:allowBackup="true"
-                  android:label="ChatGPT APK Üretici"
+                  android:usesCleartextTraffic="true"
+                  android:label="AI Studio APK Üretici"
                   android:supportsRtl="true"
                   android:theme="@android:style/Theme.Material.NoActionBar">
                   <activity
@@ -141,11 +145,18 @@ jobs:
           cat << 'EOF' > app/src/main/java/com/cengiz718/apkuetici/MainActivity.kt
           package com.cengiz718.apkuetici
 
+          import android.annotation.SuppressLint
           import android.content.ClipData
           import android.content.ClipboardManager
           import android.content.Context
+          import android.content.Intent
+          import android.net.Uri
           import android.os.Bundle
-          import android.os.Environment
+          import android.util.Base64
+          import android.webkit.JavascriptInterface
+          import android.webkit.WebChromeClient
+          import android.webkit.WebView
+          import android.webkit.WebViewClient
           import android.widget.Toast
           import androidx.activity.ComponentActivity
           import androidx.activity.compose.setContent
@@ -155,10 +166,14 @@ jobs:
           import androidx.compose.foundation.lazy.items
           import androidx.compose.foundation.shape.RoundedCornerShape
           import androidx.compose.material.icons.Icons
+          import androidx.compose.material.icons.filled.Build
+          import androidx.compose.material.icons.filled.Code
           import androidx.compose.material.icons.filled.ContentCopy
-          import androidx.compose.material.icons.filled.Download
+          import androidx.compose.material.icons.filled.Delete
+          import androidx.compose.material.icons.filled.PlayArrow
           import androidx.compose.material.icons.filled.Send
           import androidx.compose.material.icons.filled.Settings
+          import androidx.compose.material.icons.filled.Upload
           import androidx.compose.material3.*
           import androidx.compose.runtime.*
           import androidx.compose.ui.Alignment
@@ -170,6 +185,7 @@ jobs:
           import androidx.compose.ui.text.input.PasswordVisualTransformation
           import androidx.compose.ui.unit.dp
           import androidx.compose.ui.unit.sp
+          import androidx.compose.ui.viewinterop.AndroidView
           import kotlinx.coroutines.Dispatchers
           import kotlinx.coroutines.launch
           import kotlinx.coroutines.withContext
@@ -179,336 +195,187 @@ jobs:
           import okhttp3.RequestBody.Companion.toRequestBody
           import org.json.JSONArray
           import org.json.JSONObject
-          import java.io.File
-          import java.io.FileOutputStream
           import java.util.concurrent.TimeUnit
-          import java.util.zip.ZipEntry
-          import java.util.zip.ZipOutputStream
 
           data class ChatMessage(val role: String, val content: String)
 
-          class MainActivity : ComponentActivity() {
-              override fun onCreate(savedInstanceState: Bundle?) {
-                  super.onCreate(savedInstanceState)
-                  setContent {
-                      MaterialTheme(colorScheme = darkColorScheme()) {
-                          ApkGeneratorScreen()
+          class NativeBridge(private val context: Context) {
+              @JavascriptInterface
+              fun toast(msg: String) {
+                  (context as? ComponentActivity)?.runOnUiThread {
+                      Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                  }
+              }
+
+              @JavascriptInterface
+              fun copyText(text: String) {
+                  (context as? ComponentActivity)?.runOnUiThread {
+                      val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                      cm.setPrimaryClip(ClipData.newPlainText("Kopyalanan", text))
+                      Toast.makeText(context, "Panoya kopyalandı", Toast.LENGTH_SHORT).show()
+                  }
+              }
+
+              @JavascriptInterface
+              fun shareText(text: String) {
+                  (context as? ComponentActivity)?.runOnUiThread {
+                      val intent = Intent(Intent.ACTION_SEND).apply {
+                          type = "text/plain"
+                          putExtra(Intent.EXTRA_TEXT, text)
                       }
+                      context.startActivity(Intent.createChooser(intent, "Paylaş"))
                   }
               }
           }
 
-          @OptIn(ExperimentalMaterial3Api::class)
-          @Composable
-          fun ApkGeneratorScreen() {
-              val context = LocalContext.current
-              val prefs = remember { context.getSharedPreferences("apk_ai_prefs", Context.MODE_PRIVATE) }
-              val scope = rememberCoroutineScope()
-
-              var apiKey by remember { mutableStateOf(prefs.getString("api_key", "") ?: "") }
-              var provider by remember { mutableStateOf(prefs.getString("provider", "OpenAI") ?: "OpenAI") }
-              var projectType by remember { mutableStateOf("Kotlin Jetpack Compose") }
-              var showSettings by remember { mutableStateOf(apiKey.isBlank()) }
-
-              var promptInput by remember { mutableStateOf("") }
-              var isLoading by remember { mutableStateOf(false) }
-              val messages = remember {
-                  mutableStateListOf(
-                      ChatMessage(
-                          "assistant",
-                          "Merhaba! Hangi Android APK uygulamasını üretmek istiyorsun? Uygulamanın özelliklerini yaz; sana GitHub Actions ile tek tıkla APK'ya dönüşecek tüm proje dosyalarını hazırlayayım."
-                      )
-                  )
-              }
-
-              Scaffold(
-                  topBar = {
-                      TopAppBar(
-                          title = {
-                              Column {
-                                  Text("ChatGPT APK Üretici", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                                  Text("$provider • $projectType", fontSize = 11.sp, color = Color(0xFF94A3B8))
-                              }
-                          },
-                          actions = {
-                              IconButton(onClick = { showSettings = !showSettings }) {
-                                  Icon(Icons.Default.Settings, contentDescription = "Ayarlar")
-                              }
-                          }
-                      )
-                  }
-              ) { padding ->
-                  Column(
-                      modifier = Modifier
-                          .fillMaxSize()
-                          .padding(padding)
-                          .background(Color(0xFF0F172A))
-                  ) {
-                      if (showSettings) {
-                          Card(
-                              modifier = Modifier
-                                  .fillMaxWidth()
-                                  .padding(12.dp),
-                              colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B))
-                          ) {
-                              Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                  Text("API ve Proje Ayarları", fontWeight = FontWeight.Bold, color = Color.White)
-
-                                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                      listOf("OpenAI", "Groq", "OpenRouter").forEach { item ->
-                                          FilterChip(
-                                              selected = provider == item,
-                                              onClick = { provider = item },
-                                              label = { Text(item) }
-                                          )
-                                      }
-                                  }
-
-                                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                      listOf("Kotlin Jetpack Compose", "HTML/JS WebView APK").forEach { type ->
-                                          FilterChip(
-                                              selected = projectType == type,
-                                              onClick = { projectType = type },
-                                              label = { Text(type, fontSize = 11.sp) }
-                                          )
-                                      }
-                                  }
-
-                                  OutlinedTextField(
-                                      value = apiKey,
-                                      onValueChange = { apiKey = it },
-                                      label = { Text("$provider API Key") },
-                                      visualTransformation = PasswordVisualTransformation(),
-                                      singleLine = true,
-                                      modifier = Modifier.fillMaxWidth()
-                                  )
-
-                                  Button(
-                                      onClick = {
-                                          prefs.edit()
-                                              .putString("api_key", apiKey.trim())
-                                              .putString("provider", provider)
-                                              .apply()
-                                          showSettings = false
-                                          Toast.makeText(context, "Ayarlar kaydedildi", Toast.LENGTH_SHORT).show()
-                                      },
-                                      modifier = Modifier.fillMaxWidth()
-                                  ) {
-                                      Text("Kaydet ve Kapat")
-                                  }
-                              }
-                          }
+          object BuiltInTemplates {
+              fun ecommerceTemplate(): String = """
+                  <!DOCTYPE html>
+                  <html lang="tr">
+                  <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <style>
+                      body { font-family: sans-serif; margin:0; background:#0f172a; color:#f8fafc; padding:14px; }
+                      .top { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+                      .badge { background:#2563eb; padding:6px 12px; border-radius:999px; font-size:12px; font-weight:bold; }
+                      .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+                      .card { background:#1e293b; border:1px solid #334155; border-radius:12px; padding:12px; }
+                      .price { color:#38bdf8; font-weight:bold; margin:6px 0; }
+                      button { width:100%; border:none; border-radius:8px; padding:9px; background:#2563eb; color:#fff; font-weight:bold; cursor:pointer; }
+                      .wa { background:#16a34a; margin-top:14px; padding:12px; font-size:15px; }
+                    </style>
+                  </head>
+                  <body>
+                    <div class="top">
+                      <h3 style="margin:0;">Katalog & Sipariş</h3>
+                      <span class="badge" id="cartCount">Sepet: 0</span>
+                    </div>
+                    <div class="grid" id="productList"></div>
+                    <button class="wa" onclick="sendWhatsApp()">WhatsApp ile Sipariş Gönder</button>
+                    <script>
+                      const products = [
+                        { id:1, name:"Ürün Paketi A", price:450 },
+                        { id:2, name:"Ürün Paketi B", price:750 },
+                        { id:3, name:"Ekipman Seti", price:1200 },
+                        { id:4, name:"Aksesuar Seti", price:320 }
+                      ];
+                      let cart = JSON.parse(localStorage.getItem("cart_items") || "[]");
+                      function render() {
+                        document.getElementById("cartCount").innerText = "Sepet: " + cart.length;
+                        localStorage.setItem("cart_items", JSON.stringify(cart));
+                        const el = document.getElementById("productList");
+                        el.innerHTML = products.map(p => `<div class="card"><div><b>${'$'}{p.name}</b></div><div class="price">${'$'}{p.price} TL</div><button onclick="addItem(${'$'}{p.id})">Sepete Ekle</button></div>`).join("");
                       }
-
-                      LazyColumn(
-                          modifier = Modifier
-                              .weight(1f)
-                              .padding(horizontal = 12.dp),
-                          verticalArrangement = Arrangement.spacedBy(10.dp),
-                          contentPadding = PaddingValues(vertical = 12.dp)
-                      ) {
-                          items(messages) { msg ->
-                              val isUser = msg.role == "user"
-                              Card(
-                                  colors = CardDefaults.cardColors(
-                                      containerColor = if (isUser) Color(0xFF2563EB) else Color(0xFF1E293B)
-                                  ),
-                                  shape = RoundedCornerShape(14.dp),
-                                  modifier = Modifier.fillMaxWidth()
-                              ) {
-                                  Column(modifier = Modifier.padding(12.dp)) {
-                                      Text(
-                                          text = if (isUser) "Sen" else "APK Üretici AI",
-                                          fontWeight = FontWeight.Bold,
-                                          fontSize = 12.sp,
-                                          color = if (isUser) Color.White else Color(0xFF38BDF8)
-                                      )
-                                      Spacer(modifier = Modifier.height(4.dp))
-                                      Text(
-                                          text = msg.content,
-                                          color = Color.White,
-                                          fontSize = 13.sp,
-                                          fontFamily = if (!isUser && msg.content.contains("===")) FontFamily.Monospace else FontFamily.Default
-                                      )
-                                      if (!isUser && msg.content.contains("===FILE:")) {
-                                          Spacer(modifier = Modifier.height(10.dp))
-                                          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                              OutlinedButton(
-                                                  onClick = {
-                                                      val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                                      clipboard.setPrimaryClip(ClipData.newPlainText("APK Kodları", msg.content))
-                                                      Toast.makeText(context, "Tüm kodlar panoya kopyalandı", Toast.LENGTH_SHORT).show()
-                                                  }
-                                              ) {
-                                                  Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
-                                                  Spacer(Modifier.width(4.dp))
-                                                  Text("Kopyala", fontSize = 12.sp)
-                                              }
-                                              Button(
-                                                  onClick = {
-                                                      val savedPath = exportGeneratedFilesToZip(context, msg.content)
-                                                      Toast.makeText(context, "ZIP İndirilenlere kaydedildi:\n$savedPath", Toast.LENGTH_LONG).show()
-                                                  }
-                                              ) {
-                                                  Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
-                                                  Spacer(Modifier.width(4.dp))
-                                                  Text("ZIP İndir", fontSize = 12.sp)
-                                              }
-                                          }
-                                      }
-                                  }
-                              }
-                          }
+                      function addItem(id) {
+                        const item = products.find(x => x.id === id);
+                        cart.push(item);
+                        render();
+                        if (window.AndroidBridge) window.AndroidBridge.toast(item.name + " eklendi");
                       }
-
-                      if (isLoading) {
-                          LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                      function sendWhatsApp() {
+                        if (!cart.length) { alert("Sepet boş"); return; }
+                        const total = cart.reduce((a,b)=>a+b.price,0);
+                        const lines = cart.map(x=>"- " + x.name + " (" + x.price + " TL)").join("\n");
+                        const msg = encodeURIComponent("Yeni Sipariş:\n" + lines + "\nToplam: " + total + " TL");
+                        window.open("https://wa.me/?text=" + msg, "_blank");
                       }
+                      render();
+                    </script>
+                  </body>
+                  </html>
+              """.trimIndent()
 
-                      Row(
-                          modifier = Modifier
-                              .fillMaxWidth()
-                              .background(Color(0xFF1E293B))
-                              .padding(10.dp),
-                          verticalAlignment = Alignment.CenterVertically
-                      ) {
-                          OutlinedTextField(
-                              value = promptInput,
-                              onValueChange = { promptInput = it },
-                              placeholder = { Text("Örn: Stok takip ve barkod okuma APK'sı yap...") },
-                              modifier = Modifier.weight(1f),
-                              maxLines = 4
-                          )
-                          Spacer(modifier = Modifier.width(8.dp))
-                          IconButton(
-                              onClick = {
-                                  if (promptInput.isBlank() || isLoading) return@IconButton
-                                  if (apiKey.isBlank()) {
-                                      showSettings = true
-                                      Toast.makeText(context, "Önce API anahtarını girin", Toast.LENGTH_SHORT).show()
-                                      return@IconButton
-                                  }
-                                  val userText = promptInput.trim()
-                                  promptInput = ""
-                                  messages.add(ChatMessage("user", userText))
-                                  isLoading = true
-
-                                  scope.launch {
-                                      val response = callAiGenerator(apiKey.trim(), provider, projectType, userText)
-                                      messages.add(ChatMessage("assistant", response))
-                                      isLoading = false
-                                  }
-                              },
-                              modifier = Modifier.background(Color(0xFF2563EB), RoundedCornerShape(12.dp))
-                          ) {
-                              Icon(Icons.Default.Send, contentDescription = "Üret", tint = Color.White)
-                          }
+              fun orderTrackerTemplate(): String = """
+                  <!DOCTYPE html>
+                  <html lang="tr">
+                  <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <style>
+                      body { font-family: sans-serif; margin:0; background:#0f172a; color:#f8fafc; padding:14px; }
+                      input, select, button { width:100%; box-sizing:border-box; padding:10px; margin-bottom:8px; border-radius:8px; border:1px solid #334155; background:#1e293b; color:#fff; }
+                      button { background:#2563eb; border:none; font-weight:bold; cursor:pointer; }
+                      .order { background:#1e293b; border-left:4px solid #38bdf8; padding:10px; border-radius:8px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; }
+                    </style>
+                  </head>
+                  <body>
+                    <h3 style="margin-top:0;">Sipariş & İşlem Takip</h3>
+                    <input id="custName" placeholder="Müşteri / Kayıt Adı" />
+                    <input id="orderNote" placeholder="Ürün / Açıklama" />
+                    <select id="orderStatus">
+                      <option value="Hazırlanıyor">Hazırlanıyor</option>
+                      <option value="Kargoda">Kargoda</option>
+                      <option value="Teslim Edildi">Teslim Edildi</option>
+                    </select>
+                    <button onclick="addOrder()">Kayıt Ekle</button>
+                    <div id="ordersList"></div>
+                    <script>
+                      let orders = JSON.parse(localStorage.getItem("orders_db") || "[]");
+                      function saveAndRender() {
+                        localStorage.setItem("orders_db", JSON.stringify(orders));
+                        const box = document.getElementById("ordersList");
+                        box.innerHTML = orders.map((o, idx) => `<div class="order"><div><b>${'$'}{o.name}</b><br><small>${'$'}{o.note} • ${'$'}{o.status}</small></div><button style="width:auto;background:#dc2626;" onclick="delOrder(${'$'}{idx})">Sil</button></div>`).join("");
                       }
-                  }
-              }
-          }
-
-          suspend fun callAiGenerator(apiKey: String, provider: String, projectType: String, userPrompt: String): String =
-              withContext(Dispatchers.IO) {
-                  try {
-                      val (url, model) = when (provider) {
-                          "Groq" -> "https://api.groq.com/openai/v1/chat/completions" to "llama-3.3-70b-versatile"
-                          "OpenRouter" -> "https://openrouter.ai/api/v1/chat/completions" to "openai/gpt-4o-mini"
-                          else -> "https://api.openai.com/v1/chat/completions" to "gpt-4o-mini"
+                      function addOrder() {
+                        const name = document.getElementById("custName").value.trim();
+                        const note = document.getElementById("orderNote").value.trim();
+                        const status = document.getElementById("orderStatus").value;
+                        if (!name) return;
+                        orders.unshift({ name, note, status });
+                        document.getElementById("custName").value = "";
+                        document.getElementById("orderNote").value = "";
+                        saveAndRender();
                       }
+                      function delOrder(i) { orders.splice(i, 1); saveAndRender(); }
+                      saveAndRender();
+                    </script>
+                  </body>
+                  </html>
+              """.trimIndent()
 
-                      val systemPrompt = """
-                          Sen uzman bir Android APK Proje Üreticisisin. Kullanıcının istediği uygulamayı doğrudan GitHub Actions üzerinde Gradle ile derlenip .apk çıkacak şekilde tam proje dosyaları halinde üret.
-                          Seçilen Mimari: $projectType.
-                          KURALLAR:
-                          1. Eksik veya yarım kod yazma, çalışır tam kod ver.
-                          2. Her dosyayı mutlaka şu formatta blokla ki uygulama otomatik ZIP paketine çevirebilsin:
-                          ===FILE: dosya/yolu/DosyaAdi.uzanti===
-                          (dosya içeriği)
-                          ===ENDFILE===
-                          3. Mutlaka şu dosyaları dahil et:
-                             - .github/workflows/build.yml (JDK 17 + Gradle 8.4 + gradle assembleDebug + upload-artifact)
-                             - settings.gradle.kts
-                             - build.gradle.kts
-                             - gradle.properties
-                             - app/build.gradle.kts
-                             - app/src/main/AndroidManifest.xml
-                             - app/src/main/java/com/app/generated/MainActivity.kt
-                      """.trimIndent()
-
-                      val jsonBody = JSONObject().apply {
-                          put("model", model)
-                          put("temperature", 0.2)
-                          put("messages", JSONArray().apply {
-                              put(JSONObject().apply {
-                                  put("role", "system")
-                                  put("content", systemPrompt)
-                              })
-                              put(JSONObject().apply {
-                                  put("role", "user")
-                                  put("content", userPrompt)
-                              })
-                          })
+              fun tvRadioTemplate(): String = """
+                  <!DOCTYPE html>
+                  <html lang="tr">
+                  <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <style>
+                      body { font-family: sans-serif; margin:0; background:#090d16; color:#f8fafc; padding:12px; }
+                      video { width:100%; max-height:220px; background:#000; border-radius:12px; }
+                      .row { display:flex; gap:8px; margin:10px 0; }
+                      input { flex:1; padding:8px; border-radius:8px; border:1px solid #334155; background:#1e293b; color:#fff; }
+                      button { padding:8px 12px; border:none; border-radius:8px; background:#2563eb; color:#fff; font-weight:bold; }
+                      button:focus { outline:3px solid #38bdf8; }
+                      .ch { padding:10px; margin-bottom:6px; background:#1e293b; border-radius:8px; display:flex; justify-content:space-between; }
+                    </style>
+                  </head>
+                  <body>
+                    <video id="player" controls autoplay></video>
+                    <div id="nowPlaying" style="margin:6px 0;font-size:13px;color:#38bdf8;">Kanal seçin</div>
+                    <div class="row">
+                      <input id="m3uUrl" placeholder="M3U veya yayın URL yapıştır..." />
+                      <button onclick="addStream()">Ekle</button>
+                    </div>
+                    <div id="channels"></div>
+                    <script>
+                      let channels = JSON.parse(localStorage.getItem("tv_channels") || "[]");
+                      if (!channels.length) {
+                        channels = [
+                          { title: "Örnek Radyo Yayını", url: "" },
+                          { title: "Örnek TV Akışı", url: "" }
+                        ];
                       }
-
-                      val client = OkHttpClient.Builder()
-                          .connectTimeout(60, TimeUnit.SECONDS)
-                          .readTimeout(120, TimeUnit.SECONDS)
-                          .build()
-
-                      val request = Request.Builder()
-                          .url(url)
-                          .addHeader("Authorization", "Bearer $apiKey")
-                          .addHeader("Content-Type", "application/json")
-                          .post(jsonBody.toString().toRequestBody("application/json".toMediaType()))
-                          .build()
-
-                      client.newCall(request).execute().use { resp ->
-                          val bodyStr = resp.body?.string() ?: ""
-                          if (!resp.isSuccessful) {
-                              return@withContext "API Hatası (${resp.code}): $bodyStr"
-                          }
-                          val json = JSONObject(bodyStr)
-                          json.getJSONArray("choices")
-                              .getJSONObject(0)
-                              .getJSONObject("message")
-                              .getString("content")
+                      function renderCh() {
+                        localStorage.setItem("tv_channels", JSON.stringify(channels));
+                        const el = document.getElementById("channels");
+                        el.innerHTML = channels.map((c, i) => `<button class="ch" style="width:100%;text-align:left;" onclick="playCh(${'$'}{i})"><span>${'$'}{c.title}</span><small>Oynat</small></button>`).join("");
                       }
-                  } catch (e: Exception) {
-                      "Bağlantı Hatası: ${e.message}"
-                  }
-              }
-
-          fun exportGeneratedFilesToZip(context: Context, aiResponse: String): String {
-              val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-              val zipFile = File(downloadsDir, "Uretilen_APK_Projesi_${System.currentTimeMillis()}.zip")
-              val regex = Regex("===FILE:\\s*(.+?)===\\s*([\\s\\S]*?)===ENDFILE===")
-              val matches = regex.findAll(aiResponse).toList()
-
-              ZipOutputStream(FileOutputStream(zipFile)).use { zos ->
-                  if (matches.isEmpty()) {
-                      zos.putNextEntry(ZipEntry("proje_kodlari.txt"))
-                      zos.write(aiResponse.toByteArray())
-                      zos.closeEntry()
-                  } else {
-                      for (match in matches) {
-                          val path = match.groupValues[1].trim()
-                          val code = match.groupValues[2].trim()
-                          zos.putNextEntry(ZipEntry(path))
-                          zos.write(code.toByteArray())
-                          zos.closeEntry()
-                      }
-                  }
-              }
-              return zipFile.name
-          }
-          EOF
-
-      - name: Debug APK Derle
-        run: gradle assembleDebug --no-daemon
-
-      - name: APK Yukle
-        uses: actions/upload-artifact@v4
-        with:
-          name: ChatGPT-APK-Uretici
-          path: app/build/outputs/apk/debug/app-debug.apk
+                      function playCh(i) {
+                        const c = channels[i];
+                        document.getElementById("nowPlaying").innerText = "Yayın: " + c.title;
+                        if (c.url) {
+                          const v = document.getElementById("player");
+                          v.src = c.url;
+                          v.play().
+                          
