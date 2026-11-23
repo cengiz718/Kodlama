@@ -29,11 +29,10 @@ jobs:
 
       - name: Android Projesini Olustur
         run: |
-          python3 - << 'PYCODE'
-          import os
+          mkdir -p app/src/main/java/com/cengiz718/apkuetici
 
-          files = {
-              "settings.gradle.kts": """pluginManagement {
+          cat << 'EOF' > settings.gradle.kts
+          pluginManagement {
               repositories {
                   google()
                   mavenCentral()
@@ -49,18 +48,24 @@ jobs:
           }
           rootProject.name = "AIStudioAPKUretici"
           include(":app")
-          """,
-              "build.gradle.kts": """plugins {
+          EOF
+
+          cat << 'EOF' > build.gradle.kts
+          plugins {
               id("com.android.application") version "8.2.2" apply false
               id("org.jetbrains.kotlin.android") version "1.9.22" apply false
           }
-          """,
-              "gradle.properties": """org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          EOF
+
+          cat << 'EOF' > gradle.properties
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
           android.useAndroidX=true
           kotlin.code.style=official
           android.nonTransitiveRClass=true
-          """,
-              "app/build.gradle.kts": """plugins {
+          EOF
+
+          cat << 'EOF' > app/build.gradle.kts
+          plugins {
               id("com.android.application")
               id("org.jetbrains.kotlin.android")
           }
@@ -73,8 +78,8 @@ jobs:
                   applicationId = "com.cengiz718.apkuetici"
                   minSdk = 24
                   targetSdk = 34
-                  versionCode = 3
-                  versionName = "3.0"
+                  versionCode = 4
+                  versionName = "4.0"
               }
 
               buildTypes {
@@ -110,8 +115,10 @@ jobs:
               implementation("com.squareup.okhttp3:okhttp:4.12.0")
               implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
           }
-          """,
-              "app/src/main/AndroidManifest.xml": """<?xml version="1.0" encoding="utf-8"?>
+          EOF
+
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
               <uses-permission android:name="android.permission.INTERNET" />
@@ -133,8 +140,10 @@ jobs:
                   </activity>
               </application>
           </manifest>
-          """,
-              "app/src/main/java/com/cengiz718/apkuetici/MainActivity.kt": """package com.cengiz718.apkuetici
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/cengiz718/apkuetici/MainActivity.kt
+          package com.cengiz718.apkuetici
 
           import android.annotation.SuppressLint
           import android.content.ClipData
@@ -223,7 +232,7 @@ jobs:
           }
 
           object BuiltInTemplates {
-              fun ecommerceTemplate(): String = \"\"\"
+              fun ecommerceTemplate(): String = """
                   <!DOCTYPE html>
                   <html lang="tr">
                   <head>
@@ -243,7 +252,7 @@ jobs:
                   </head>
                   <body>
                     <div class="top">
-                      <h3 style="margin:0;">Katalog & WhatsApp Sipariş</h3>
+                      <h3 style="margin:0;">Katalog & Sipariş</h3>
                       <span class="badge" id="cartCount">Sepet: 0</span>
                     </div>
                     <input id="searchBox" placeholder="Ürün ara..." oninput="render()" />
@@ -263,7 +272,7 @@ jobs:
                         localStorage.setItem("cart_items", JSON.stringify(cart));
                         const filtered = products.filter(p => p.name.toLowerCase().includes(q));
                         document.getElementById("productList").innerHTML = filtered.map(p =>
-                          `<div class="card"><div><b>\${p.name}</b></div><div class="price">\${p.price} TL</div><button onclick="addItem(\${p.id})">Sepete Ekle</button></div>`
+                          `<div class="card"><div><b>${p.name}</b></div><div class="price">${p.price} TL</div><button onclick="addItem(${p.id})">Sepete Ekle</button></div>`
                         ).join("");
                       }
                       function addItem(id) {
@@ -275,17 +284,17 @@ jobs:
                       function sendWhatsApp() {
                         if (!cart.length) { alert("Sepet boş"); return; }
                         const total = cart.reduce((a,b)=>a+b.price,0);
-                        const lines = cart.map(x=>"- " + x.name + " (" + x.price + " TL)").join("\\n");
-                        const msg = encodeURIComponent("Yeni Sipariş:\\n" + lines + "\\nToplam: " + total + " TL");
+                        const lines = cart.map(x=>"- " + x.name + " (" + x.price + " TL)").join("\n");
+                        const msg = encodeURIComponent("Yeni Sipariş:\n" + lines + "\nToplam: " + total + " TL");
                         window.open("https://wa.me/?text=" + msg, "_blank");
                       }
                       render();
                     </script>
                   </body>
                   </html>
-              \"\"\".trimIndent()
+              """.trimIndent()
 
-              fun orderTrackerTemplate(): String = \"\"\"
+              fun orderTrackerTemplate(): String = """
                   <!DOCTYPE html>
                   <html lang="tr">
                   <head>
@@ -314,7 +323,7 @@ jobs:
                       function saveAndRender() {
                         localStorage.setItem("orders_db", JSON.stringify(orders));
                         document.getElementById("ordersList").innerHTML = orders.map((o, idx) =>
-                          `<div class="order"><div><b>\${o.name}</b><br><small>\${o.note} • \${o.status}</small></div><button style="width:auto;background:#dc2626;" onclick="delOrder(\${idx})">Sil</button></div>`
+                          `<div class="order"><div><b>${o.name}</b><br><small>${o.note} • ${o.status}</small></div><button style="width:auto;background:#dc2626;" onclick="delOrder(${idx})">Sil</button></div>`
                         ).join("");
                       }
                       function addOrder() {
@@ -326,64 +335,3 @@ jobs:
                         document.getElementById("custName").value = "";
                         document.getElementById("orderNote").value = "";
                         saveAndRender();
-                      }
-                      function delOrder(i) { orders.splice(i, 1); saveAndRender(); }
-                      saveAndRender();
-                    </script>
-                  </body>
-                  </html>
-              \"\"\".trimIndent()
-
-              fun tvRadioTemplate(): String = \"\"\"
-                  <!DOCTYPE html>
-                  <html lang="tr">
-                  <head>
-                    <meta charset="UTF-8">
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <style>
-                      body { font-family: sans-serif; margin:0; background:#090d16; color:#f8fafc; padding:12px; }
-                      video { width:100%; max-height:220px; background:#000; border-radius:12px; }
-                      .row { display:flex; gap:8px; margin:10px 0; }
-                      input { flex:1; padding:8px; border-radius:8px; border:1px solid #334155; background:#1e293b; color:#fff; }
-                      button { padding:8px 12px; border:none; border-radius:8px; background:#2563eb; color:#fff; font-weight:bold; }
-                      button:focus { outline:3px solid #38bdf8; }
-                      .ch { padding:10px; margin-bottom:6px; background:#1e293b; border-radius:8px; display:flex; justify-content:space-between; }
-                    </style>
-                  </head>
-                  <body>
-                    <video id="player" controls autoplay></video>
-                    <div id="nowPlaying" style="margin:6px 0;font-size:13px;color:#38bdf8;">Kanal seçin</div>
-                    <div class="row">
-                      <input id="m3uUrl" placeholder="Yayın veya M3U URL yapıştır..." />
-                      <button onclick="addStream()">Ekle</button>
-                    </div>
-                    <div id="channels"></div>
-                    <script>
-                      let channels = JSON.parse(localStorage.getItem("tv_channels") || "[]");
-                      if (!channels.length) {
-                        channels = [
-                          { title: "Örnek Radyo Yayını", url: "" },
-                          { title: "Örnek TV Akışı", url: "" }
-                        ];
-                      }
-                      function renderCh() {
-                        localStorage.setItem("tv_channels", JSON.stringify(channels));
-                        document.getElementById("channels").innerHTML = channels.map((c, i) =>
-                          `<button class="ch" style="width:100%;text-align:left;" onclick="playCh(\${i})"><span>\${c.title}</span><small>Oynat</small></button>`
-                        ).join("");
-                      }
-                      function playCh(i) {
-                        const c = channels[i];
-                        document.getElementById("nowPlaying").innerText = "Yayın: " + c.title;
-                        if (c.url) {
-                          const v = document.getElementById("player");
-                          v.src = c.url;
-                          v.play().catch(()=>{});
-                        } else if (window.AndroidBridge) {
-                          window.AndroidBridge.toast("Önce yayın URL'si ekleyin");
-                        }
-                      }
-                      function addStream() {
-                        const u = document.getElementById("m3uUrl").value.trim();
-                        if (!u) return;
-                        channels.unshift({ title:
