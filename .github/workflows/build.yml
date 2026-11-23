@@ -1,0 +1,514 @@
+name: Build ChatGPT APK Generator
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Depoyu Cek
+        uses: actions/checkout@v4
+
+      - name: JDK 17 Kur
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Gradle Kur
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.4'
+
+      - name: Android Proje Dosyalarini Olustur
+        run: |
+          mkdir -p app/src/main/java/com/cengiz718/apkuetici
+
+          cat << 'EOF' > settings.gradle.kts
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "ChatGPTAPKUretici"
+          include(":app")
+          EOF
+
+          cat << 'EOF' > build.gradle.kts
+          plugins {
+              id("com.android.application") version "8.2.2" apply false
+              id("org.jetbrains.kotlin.android") version "1.9.22" apply false
+          }
+          EOF
+
+          cat << 'EOF' > gradle.properties
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          kotlin.code.style=official
+          android.nonTransitiveRClass=true
+          EOF
+
+          cat << 'EOF' > app/build.gradle.kts
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+          }
+
+          android {
+              namespace = "com.cengiz718.apkuetici"
+              compileSdk = 34
+
+              defaultConfig {
+                  applicationId = "com.cengiz718.apkuetici"
+                  minSdk = 24
+                  targetSdk = 34
+                  versionCode = 1
+                  versionName = "1.0"
+              }
+
+              buildTypes {
+                  release {
+                      isMinifyEnabled = false
+                      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+              buildFeatures {
+                  compose = true
+              }
+              composeOptions {
+                  kotlinCompilerExtensionVersion = "1.5.8"
+              }
+          }
+
+          dependencies {
+              implementation("androidx.core:core-ktx:1.12.0")
+              implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
+              implementation("androidx.activity:activity-compose:1.8.2")
+              implementation(platform("androidx.compose:compose-bom:2024.02.00"))
+              implementation("androidx.compose.ui:ui")
+              implementation("androidx.compose.ui:ui-graphics")
+              implementation("androidx.compose.material3:material3")
+              implementation("androidx.compose.material:material-icons-extended")
+              implementation("com.squareup.okhttp3:okhttp:4.12.0")
+              implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <uses-permission android:name="android.permission.INTERNET" />
+
+              <application
+                  android:allowBackup="true"
+                  android:label="ChatGPT APK Üretici"
+                  android:supportsRtl="true"
+                  android:theme="@android:style/Theme.Material.NoActionBar">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:windowSoftInputMode="adjustResize">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/cengiz718/apkuetici/MainActivity.kt
+          package com.cengiz718.apkuetici
+
+          import android.content.ClipData
+          import android.content.ClipboardManager
+          import android.content.Context
+          import android.os.Bundle
+          import android.os.Environment
+          import android.widget.Toast
+          import androidx.activity.ComponentActivity
+          import androidx.activity.compose.setContent
+          import androidx.compose.foundation.background
+          import androidx.compose.foundation.layout.*
+          import androidx.compose.foundation.lazy.LazyColumn
+          import androidx.compose.foundation.lazy.items
+          import androidx.compose.foundation.shape.RoundedCornerShape
+          import androidx.compose.material.icons.Icons
+          import androidx.compose.material.icons.filled.ContentCopy
+          import androidx.compose.material.icons.filled.Download
+          import androidx.compose.material.icons.filled.Send
+          import androidx.compose.material.icons.filled.Settings
+          import androidx.compose.material3.*
+          import androidx.compose.runtime.*
+          import androidx.compose.ui.Alignment
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.graphics.Color
+          import androidx.compose.ui.platform.LocalContext
+          import androidx.compose.ui.text.font.FontFamily
+          import androidx.compose.ui.text.font.FontWeight
+          import androidx.compose.ui.text.input.PasswordVisualTransformation
+          import androidx.compose.ui.unit.dp
+          import androidx.compose.ui.unit.sp
+          import kotlinx.coroutines.Dispatchers
+          import kotlinx.coroutines.launch
+          import kotlinx.coroutines.withContext
+          import okhttp3.MediaType.Companion.toMediaType
+          import okhttp3.OkHttpClient
+          import okhttp3.Request
+          import okhttp3.RequestBody.Companion.toRequestBody
+          import org.json.JSONArray
+          import org.json.JSONObject
+          import java.io.File
+          import java.io.FileOutputStream
+          import java.util.concurrent.TimeUnit
+          import java.util.zip.ZipEntry
+          import java.util.zip.ZipOutputStream
+
+          data class ChatMessage(val role: String, val content: String)
+
+          class MainActivity : ComponentActivity() {
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  setContent {
+                      MaterialTheme(colorScheme = darkColorScheme()) {
+                          ApkGeneratorScreen()
+                      }
+                  }
+              }
+          }
+
+          @OptIn(ExperimentalMaterial3Api::class)
+          @Composable
+          fun ApkGeneratorScreen() {
+              val context = LocalContext.current
+              val prefs = remember { context.getSharedPreferences("apk_ai_prefs", Context.MODE_PRIVATE) }
+              val scope = rememberCoroutineScope()
+
+              var apiKey by remember { mutableStateOf(prefs.getString("api_key", "") ?: "") }
+              var provider by remember { mutableStateOf(prefs.getString("provider", "OpenAI") ?: "OpenAI") }
+              var projectType by remember { mutableStateOf("Kotlin Jetpack Compose") }
+              var showSettings by remember { mutableStateOf(apiKey.isBlank()) }
+
+              var promptInput by remember { mutableStateOf("") }
+              var isLoading by remember { mutableStateOf(false) }
+              val messages = remember {
+                  mutableStateListOf(
+                      ChatMessage(
+                          "assistant",
+                          "Merhaba! Hangi Android APK uygulamasını üretmek istiyorsun? Uygulamanın özelliklerini yaz; sana GitHub Actions ile tek tıkla APK'ya dönüşecek tüm proje dosyalarını hazırlayayım."
+                      )
+                  )
+              }
+
+              Scaffold(
+                  topBar = {
+                      TopAppBar(
+                          title = {
+                              Column {
+                                  Text("ChatGPT APK Üretici", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                  Text("$provider • $projectType", fontSize = 11.sp, color = Color(0xFF94A3B8))
+                              }
+                          },
+                          actions = {
+                              IconButton(onClick = { showSettings = !showSettings }) {
+                                  Icon(Icons.Default.Settings, contentDescription = "Ayarlar")
+                              }
+                          }
+                      )
+                  }
+              ) { padding ->
+                  Column(
+                      modifier = Modifier
+                          .fillMaxSize()
+                          .padding(padding)
+                          .background(Color(0xFF0F172A))
+                  ) {
+                      if (showSettings) {
+                          Card(
+                              modifier = Modifier
+                                  .fillMaxWidth()
+                                  .padding(12.dp),
+                              colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B))
+                          ) {
+                              Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                  Text("API ve Proje Ayarları", fontWeight = FontWeight.Bold, color = Color.White)
+
+                                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                      listOf("OpenAI", "Groq", "OpenRouter").forEach { item ->
+                                          FilterChip(
+                                              selected = provider == item,
+                                              onClick = { provider = item },
+                                              label = { Text(item) }
+                                          )
+                                      }
+                                  }
+
+                                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                      listOf("Kotlin Jetpack Compose", "HTML/JS WebView APK").forEach { type ->
+                                          FilterChip(
+                                              selected = projectType == type,
+                                              onClick = { projectType = type },
+                                              label = { Text(type, fontSize = 11.sp) }
+                                          )
+                                      }
+                                  }
+
+                                  OutlinedTextField(
+                                      value = apiKey,
+                                      onValueChange = { apiKey = it },
+                                      label = { Text("$provider API Key") },
+                                      visualTransformation = PasswordVisualTransformation(),
+                                      singleLine = true,
+                                      modifier = Modifier.fillMaxWidth()
+                                  )
+
+                                  Button(
+                                      onClick = {
+                                          prefs.edit()
+                                              .putString("api_key", apiKey.trim())
+                                              .putString("provider", provider)
+                                              .apply()
+                                          showSettings = false
+                                          Toast.makeText(context, "Ayarlar kaydedildi", Toast.LENGTH_SHORT).show()
+                                      },
+                                      modifier = Modifier.fillMaxWidth()
+                                  ) {
+                                      Text("Kaydet ve Kapat")
+                                  }
+                              }
+                          }
+                      }
+
+                      LazyColumn(
+                          modifier = Modifier
+                              .weight(1f)
+                              .padding(horizontal = 12.dp),
+                          verticalArrangement = Arrangement.spacedBy(10.dp),
+                          contentPadding = PaddingValues(vertical = 12.dp)
+                      ) {
+                          items(messages) { msg ->
+                              val isUser = msg.role == "user"
+                              Card(
+                                  colors = CardDefaults.cardColors(
+                                      containerColor = if (isUser) Color(0xFF2563EB) else Color(0xFF1E293B)
+                                  ),
+                                  shape = RoundedCornerShape(14.dp),
+                                  modifier = Modifier.fillMaxWidth()
+                              ) {
+                                  Column(modifier = Modifier.padding(12.dp)) {
+                                      Text(
+                                          text = if (isUser) "Sen" else "APK Üretici AI",
+                                          fontWeight = FontWeight.Bold,
+                                          fontSize = 12.sp,
+                                          color = if (isUser) Color.White else Color(0xFF38BDF8)
+                                      )
+                                      Spacer(modifier = Modifier.height(4.dp))
+                                      Text(
+                                          text = msg.content,
+                                          color = Color.White,
+                                          fontSize = 13.sp,
+                                          fontFamily = if (!isUser && msg.content.contains("===")) FontFamily.Monospace else FontFamily.Default
+                                      )
+                                      if (!isUser && msg.content.contains("===FILE:")) {
+                                          Spacer(modifier = Modifier.height(10.dp))
+                                          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                              OutlinedButton(
+                                                  onClick = {
+                                                      val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                                      clipboard.setPrimaryClip(ClipData.newPlainText("APK Kodları", msg.content))
+                                                      Toast.makeText(context, "Tüm kodlar panoya kopyalandı", Toast.LENGTH_SHORT).show()
+                                                  }
+                                              ) {
+                                                  Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                  Spacer(Modifier.width(4.dp))
+                                                  Text("Kopyala", fontSize = 12.sp)
+                                              }
+                                              Button(
+                                                  onClick = {
+                                                      val savedPath = exportGeneratedFilesToZip(context, msg.content)
+                                                      Toast.makeText(context, "ZIP İndirilenlere kaydedildi:\n$savedPath", Toast.LENGTH_LONG).show()
+                                                  }
+                                              ) {
+                                                  Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                  Spacer(Modifier.width(4.dp))
+                                                  Text("ZIP İndir", fontSize = 12.sp)
+                                              }
+                                          }
+                                      }
+                                  }
+                              }
+                          }
+                      }
+
+                      if (isLoading) {
+                          LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                      }
+
+                      Row(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .background(Color(0xFF1E293B))
+                              .padding(10.dp),
+                          verticalAlignment = Alignment.CenterVertically
+                      ) {
+                          OutlinedTextField(
+                              value = promptInput,
+                              onValueChange = { promptInput = it },
+                              placeholder = { Text("Örn: Stok takip ve barkod okuma APK'sı yap...") },
+                              modifier = Modifier.weight(1f),
+                              maxLines = 4
+                          )
+                          Spacer(modifier = Modifier.width(8.dp))
+                          IconButton(
+                              onClick = {
+                                  if (promptInput.isBlank() || isLoading) return@IconButton
+                                  if (apiKey.isBlank()) {
+                                      showSettings = true
+                                      Toast.makeText(context, "Önce API anahtarını girin", Toast.LENGTH_SHORT).show()
+                                      return@IconButton
+                                  }
+                                  val userText = promptInput.trim()
+                                  promptInput = ""
+                                  messages.add(ChatMessage("user", userText))
+                                  isLoading = true
+
+                                  scope.launch {
+                                      val response = callAiGenerator(apiKey.trim(), provider, projectType, userText)
+                                      messages.add(ChatMessage("assistant", response))
+                                      isLoading = false
+                                  }
+                              },
+                              modifier = Modifier.background(Color(0xFF2563EB), RoundedCornerShape(12.dp))
+                          ) {
+                              Icon(Icons.Default.Send, contentDescription = "Üret", tint = Color.White)
+                          }
+                      }
+                  }
+              }
+          }
+
+          suspend fun callAiGenerator(apiKey: String, provider: String, projectType: String, userPrompt: String): String =
+              withContext(Dispatchers.IO) {
+                  try {
+                      val (url, model) = when (provider) {
+                          "Groq" -> "https://api.groq.com/openai/v1/chat/completions" to "llama-3.3-70b-versatile"
+                          "OpenRouter" -> "https://openrouter.ai/api/v1/chat/completions" to "openai/gpt-4o-mini"
+                          else -> "https://api.openai.com/v1/chat/completions" to "gpt-4o-mini"
+                      }
+
+                      val systemPrompt = """
+                          Sen uzman bir Android APK Proje Üreticisisin. Kullanıcının istediği uygulamayı doğrudan GitHub Actions üzerinde Gradle ile derlenip .apk çıkacak şekilde tam proje dosyaları halinde üret.
+                          Seçilen Mimari: $projectType.
+                          KURALLAR:
+                          1. Eksik veya yarım kod yazma, çalışır tam kod ver.
+                          2. Her dosyayı mutlaka şu formatta blokla ki uygulama otomatik ZIP paketine çevirebilsin:
+                          ===FILE: dosya/yolu/DosyaAdi.uzanti===
+                          (dosya içeriği)
+                          ===ENDFILE===
+                          3. Mutlaka şu dosyaları dahil et:
+                             - .github/workflows/build.yml (JDK 17 + Gradle 8.4 + gradle assembleDebug + upload-artifact)
+                             - settings.gradle.kts
+                             - build.gradle.kts
+                             - gradle.properties
+                             - app/build.gradle.kts
+                             - app/src/main/AndroidManifest.xml
+                             - app/src/main/java/com/app/generated/MainActivity.kt
+                      """.trimIndent()
+
+                      val jsonBody = JSONObject().apply {
+                          put("model", model)
+                          put("temperature", 0.2)
+                          put("messages", JSONArray().apply {
+                              put(JSONObject().apply {
+                                  put("role", "system")
+                                  put("content", systemPrompt)
+                              })
+                              put(JSONObject().apply {
+                                  put("role", "user")
+                                  put("content", userPrompt)
+                              })
+                          })
+                      }
+
+                      val client = OkHttpClient.Builder()
+                          .connectTimeout(60, TimeUnit.SECONDS)
+                          .readTimeout(120, TimeUnit.SECONDS)
+                          .build()
+
+                      val request = Request.Builder()
+                          .url(url)
+                          .addHeader("Authorization", "Bearer $apiKey")
+                          .addHeader("Content-Type", "application/json")
+                          .post(jsonBody.toString().toRequestBody("application/json".toMediaType()))
+                          .build()
+
+                      client.newCall(request).execute().use { resp ->
+                          val bodyStr = resp.body?.string() ?: ""
+                          if (!resp.isSuccessful) {
+                              return@withContext "API Hatası (${resp.code}): $bodyStr"
+                          }
+                          val json = JSONObject(bodyStr)
+                          json.getJSONArray("choices")
+                              .getJSONObject(0)
+                              .getJSONObject("message")
+                              .getString("content")
+                      }
+                  } catch (e: Exception) {
+                      "Bağlantı Hatası: ${e.message}"
+                  }
+              }
+
+          fun exportGeneratedFilesToZip(context: Context, aiResponse: String): String {
+              val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+              val zipFile = File(downloadsDir, "Uretilen_APK_Projesi_${System.currentTimeMillis()}.zip")
+              val regex = Regex("===FILE:\\s*(.+?)===\\s*([\\s\\S]*?)===ENDFILE===")
+              val matches = regex.findAll(aiResponse).toList()
+
+              ZipOutputStream(FileOutputStream(zipFile)).use { zos ->
+                  if (matches.isEmpty()) {
+                      zos.putNextEntry(ZipEntry("proje_kodlari.txt"))
+                      zos.write(aiResponse.toByteArray())
+                      zos.closeEntry()
+                  } else {
+                      for (match in matches) {
+                          val path = match.groupValues[1].trim()
+                          val code = match.groupValues[2].trim()
+                          zos.putNextEntry(ZipEntry(path))
+                          zos.write(code.toByteArray())
+                          zos.closeEntry()
+                      }
+                  }
+              }
+              return zipFile.name
+          }
+          EOF
+
+      - name: Debug APK Derle
+        run: gradle assembleDebug --no-daemon
+
+      - name: APK Yukle
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChatGPT-APK-Uretici
+          path: app/build/outputs/apk/debug/app-debug.apk
