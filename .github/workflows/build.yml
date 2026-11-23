@@ -77,8 +77,8 @@ jobs:
                   applicationId = "com.cengiz718.apkuetici"
                   minSdk = 24
                   targetSdk = 34
-                  versionCode = 7
-                  versionName = "7.0"
+                  versionCode = 8
+                  versionName = "8.0"
               }
 
               buildTypes {
@@ -123,7 +123,7 @@ jobs:
               <application
                   android:allowBackup="true"
                   android:usesCleartextTraffic="true"
-                  android:label="AI Studio APK Üretici"
+                  android:label="AI Studio Süper Stüdyo"
                   android:supportsRtl="true"
                   android:theme="@android:style/Theme.Material.NoActionBar">
                   <activity
@@ -152,5 +152,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: studio-v${{ github.run_number }}
-          name: "AI Studio APK Uretici v${{ github.run_number }}"
+          name: "AI Studio Super Studyo v${{ github.run_number }}"
           files: app/build/outputs/apk/debug/app-debug.apk
