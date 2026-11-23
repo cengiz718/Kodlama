@@ -1,12 +1,14 @@
 package com.cengiz718.apkuetici
 
 import android.annotation.SuppressLint
+import android.app.DownloadManager
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.os.Environment
 import android.util.Base64
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
@@ -48,9 +50,33 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
-const val CURRENT_APP_VERSION = "8.1"
+const val CURRENT_APP_VERSION = "8.3"
 
 data class ChatMessage(val role: String, val content: String)
+
+fun startApkDirectDownload(context: Context, url: String, fileName: String = "AI-Studio-Yeni-Surum.apk") {
+    try {
+        if (!url.contains(".apk", ignoreCase = true)) {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            return
+        }
+        val request = DownloadManager.Request(Uri.parse(url)).apply {
+            setTitle(fileName)
+            setDescription("Yeni APK sürümü İndirilenler klasörüne indiriliyor...")
+            setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+        }
+        val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        dm.enqueue(request)
+        Toast.makeText(context, "APK İndirilenler klasörüne indiriliyor...", Toast.LENGTH_LONG).show()
+    } catch (_: Exception) {
+        try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        } catch (e: Exception) {
+            Toast.makeText(context, "İndirme başlatılamadı: " + e.message, Toast.LENGTH_SHORT).show()
+        }
+    }
+}
 
 class NativeBridge(
     private val context: Context,
@@ -92,6 +118,161 @@ class NativeBridge(
 }
 
 object BuiltInTemplates {
+    private fun baseVisualStyles(): String = """
+        * { box-sizing: border-box; }
+        body {
+          font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          margin: 0;
+          padding: 14px;
+          background:
+            radial-gradient(circle at 12% 8%, rgba(56, 189, 248, 0.18), transparent 40%),
+            radial-gradient(circle at 88% 15%, rgba(168, 85, 247, 0.22), transparent 45%),
+            radial-gradient(circle at 50% 100%, rgba(236, 72, 153, 0.12), transparent 50%),
+            #070b14;
+          color: #f8fafc;
+          min-height: 100vh;
+        }
+        .hero {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 14px;
+          border-radius: 18px;
+          margin-bottom: 14px;
+          background: linear-gradient(135deg, rgba(30, 41, 59, 0.88), rgba(15, 23, 42, 0.92));
+          border: 1px solid rgba(125, 211, 252, 0.25);
+          box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+        }
+        .hero-icon {
+          width: 46px;
+          height: 46px;
+          min-width: 46px;
+          border-radius: 14px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: linear-gradient(135deg, #2563eb, #9333ea, #ec4899);
+          box-shadow: 0 6px 18px rgba(124, 58, 237, 0.45);
+          color: #fff;
+        }
+        .hero-title {
+          margin: 0;
+          font-size: 16px;
+          font-weight: 800;
+          letter-spacing: 0.2px;
+          background: linear-gradient(90deg, #7dd3fc, #c084fc, #f9a8d4);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+        }
+        .hero-sub {
+          margin: 3px 0 0 0;
+          font-size: 12px;
+          color: #94a3b8;
+        }
+        .glass {
+          background: rgba(20, 29, 49, 0.82);
+          backdrop-filter: blur(14px);
+          border: 1px solid rgba(148, 163, 184, 0.2);
+          border-radius: 16px;
+          padding: 14px;
+          margin-bottom: 14px;
+          box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+        }
+        .sec-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 10px;
+        }
+        .sec-title {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin: 0;
+          font-size: 14px;
+          font-weight: 700;
+          color: #e2e8f0;
+        }
+        .pill {
+          font-size: 11px;
+          font-weight: 700;
+          padding: 4px 10px;
+          border-radius: 999px;
+          background: rgba(56, 189, 248, 0.16);
+          border: 1px solid rgba(56, 189, 248, 0.35);
+          color: #7dd3fc;
+        }
+        label {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          font-size: 11px;
+          font-weight: 700;
+          color: #93c5fd;
+          margin-bottom: 5px;
+          text-transform: uppercase;
+          letter-spacing: 0.4px;
+        }
+        input, textarea, select {
+          width: 100%;
+          padding: 11px 12px;
+          margin-bottom: 11px;
+          border-radius: 12px;
+          border: 1px solid rgba(148, 163, 184, 0.25);
+          background: rgba(9, 14, 26, 0.92);
+          color: #f8fafc;
+          font-size: 13px;
+        }
+        input:focus, textarea:focus, select:focus {
+          outline: none;
+          border-color: #38bdf8;
+        }
+        textarea { min-height: 74px; resize: vertical; }
+        .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+        .btn {
+          flex: 1;
+          min-width: 105px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          border: none;
+          border-radius: 12px;
+          padding: 11px 12px;
+          font-weight: 700;
+          font-size: 12px;
+          color: #fff;
+          background: linear-gradient(135deg, #2563eb, #7c3aed);
+          cursor: pointer;
+          box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+        }
+        .btn.green { background: linear-gradient(135deg, #059669, #10b981); box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3); }
+        .btn.amber { background: linear-gradient(135deg, #d97706, #ea580c); box-shadow: 0 4px 14px rgba(234, 88, 12, 0.3); }
+        .btn.danger { background: linear-gradient(135deg, #dc2626, #be123c); }
+        .btn.ghost { background: rgba(51, 65, 85, 0.85); box-shadow: none; border: 1px solid rgba(148, 163, 184, 0.22); }
+        svg.ico { width: 16px; height: 16px; flex-shrink: 0; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+        svg.ico-lg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    """.trimIndent()
+
+    private fun svgIconsHelper(): String = """
+        const ICONS = {
+          spark: '<svg class="ico" viewBox="0 0 24 24"><path d="M12 3l1.9 5.8L20 10.7l-6.1 1.9L12 18.4l-1.9-5.8L4 10.7l6.1-1.9L12 3z"/><path d="M19 16l.8 2.4L22 19.2l-2.2.8L19 22l-.8-2-2.2-.8 2.2-.8L19 16z"/></svg>',
+          image: '<svg class="ico" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-6 6-2-2-5 4"/></svg>',
+          music: '<svg class="ico" viewBox="0 0 24 24"><path d="M9 18V6l12-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>',
+          video: '<svg class="ico" viewBox="0 0 24 24"><rect x="2" y="5" width="15" height="14" rx="2.5"/><path d="M17 10l5-3v10l-5-3v-4z"/></svg>',
+          code: '<svg class="ico" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>',
+          copy: '<svg class="ico" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+          share: '<svg class="ico" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.5" x2="15.4" y2="6.5"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/></svg>',
+          play: '<svg class="ico" viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></svg>',
+          note: '<svg class="ico" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>',
+          cart: '<svg class="ico" viewBox="0 0 24 24"><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.4 11.5a2 2 0 0 0 2 1.5h9.2a2 2 0 0 0 1.9-1.5L23 7H6"/></svg>',
+          box: '<svg class="ico" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7z"/><polyline points="3.3 7 12 12 20.7 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg>',
+          tv: '<svg class="ico" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="14" rx="2.5"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="18" x2="12" y2="21"/></svg>',
+          trash: '<svg class="ico" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>',
+          history: '<svg class="ico" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><polyline points="3 3 3 8 8 8"/><polyline points="12 7 12 12 15 14"/></svg>'
+        };
+    """.trimIndent()
+
     fun promptStudioTemplate(): String = """
         <!DOCTYPE html>
         <html lang="tr">
@@ -99,198 +280,171 @@ object BuiltInTemplates {
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <style>
-            * { box-sizing: border-box; }
-            body {
-              font-family: system-ui, -apple-system, sans-serif;
-              margin: 0;
-              padding: 14px;
-              background: radial-gradient(circle at top left, #1e1b4b, #090d16 55%, #05070d);
-              color: #f8fafc;
-              min-height: 100vh;
-            }
-            .glass {
-              background: rgba(30, 41, 59, 0.76);
-              backdrop-filter: blur(12px);
-              border: 1px solid rgba(148, 163, 184, 0.22);
-              border-radius: 16px;
-              padding: 14px;
-              margin-bottom: 14px;
-              box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
-            }
-            .title {
-              margin: 0 0 6px 0;
-              font-size: 16px;
-              font-weight: 800;
-              background: linear-gradient(90deg, #38bdf8, #a855f7, #f472b6);
-              -webkit-background-clip: text;
-              -webkit-text-fill-color: transparent;
-            }
-            .sub {
-              font-size: 12px;
-              color: #94a3b8;
-              margin-bottom: 12px;
-            }
+            ${baseVisualStyles()}
             .cat-grid {
               display: grid;
               grid-template-columns: 1fr 1fr;
-              gap: 8px;
-              margin-bottom: 12px;
+              gap: 9px;
+              margin-bottom: 13px;
             }
             .cat-btn {
-              padding: 10px 8px;
-              border-radius: 12px;
-              border: 1px solid rgba(148, 163, 184, 0.25);
-              background: rgba(15, 23, 42, 0.85);
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              padding: 11px 10px;
+              border-radius: 13px;
+              border: 1px solid rgba(148, 163, 184, 0.22);
+              background: rgba(11, 17, 32, 0.9);
               color: #cbd5e1;
               font-size: 12px;
               font-weight: 700;
               cursor: pointer;
-              text-align: center;
             }
             .cat-btn.active {
               border-color: #38bdf8;
-              background: linear-gradient(135deg, rgba(37,99,235,0.45), rgba(124,58,237,0.45));
+              background: linear-gradient(135deg, rgba(37, 99, 235, 0.42), rgba(147, 51, 234, 0.42));
               color: #ffffff;
+              box-shadow: 0 6px 18px rgba(56, 189, 248, 0.22);
             }
-            label {
-              display: block;
-              font-size: 11px;
-              font-weight: 700;
-              color: #7dd3fc;
-              margin-bottom: 4px;
-              text-transform: uppercase;
-              letter-spacing: 0.4px;
-            }
-            input, textarea, select {
-              width: 100%;
-              padding: 10px 12px;
-              margin-bottom: 10px;
-              border-radius: 12px;
-              border: 1px solid rgba(148, 163, 184, 0.25);
-              background: rgba(15, 23, 42, 0.9);
-              color: #f8fafc;
-              font-size: 13px;
-            }
-            textarea { min-height: 76px; resize: vertical; }
             .chips {
               display: flex;
               flex-wrap: wrap;
-              gap: 6px;
-              margin-bottom: 12px;
+              gap: 7px;
+              margin-bottom: 13px;
             }
             .chip {
-              padding: 6px 10px;
+              padding: 6px 11px;
               border-radius: 999px;
               font-size: 11px;
-              font-weight: 600;
-              background: rgba(51, 65, 85, 0.75);
-              border: 1px solid rgba(148, 163, 184, 0.25);
+              font-weight: 700;
+              background: rgba(30, 41, 59, 0.85);
+              border: 1px solid rgba(148, 163, 184, 0.24);
               color: #e2e8f0;
               cursor: pointer;
             }
             .chip.selected {
-              background: #0284c7;
-              border-color: #38bdf8;
+              background: linear-gradient(135deg, #0284c7, #7c3aed);
+              border-color: #7dd3fc;
               color: #fff;
             }
-            .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
-            button.action {
-              flex: 1;
-              min-width: 115px;
-              border: none;
-              border-radius: 12px;
-              padding: 11px 12px;
-              font-weight: 700;
-              font-size: 12px;
-              color: #fff;
-              background: linear-gradient(135deg, #2563eb, #7c3aed);
-              cursor: pointer;
-            }
-            button.action.green { background: linear-gradient(135deg, #059669, #10b981); }
-            button.action.amber { background: linear-gradient(135deg, #d97706, #ea580c); }
-            button.action.dark { background: rgba(51, 65, 85, 0.95); }
             .result-box {
               background: #050811;
-              border: 1px solid #38bdf8;
-              border-radius: 12px;
+              border: 1px solid rgba(56, 189, 248, 0.55);
+              border-radius: 13px;
               padding: 12px;
               font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
               font-size: 12px;
-              line-height: 1.5;
+              line-height: 1.55;
               color: #e0f2fe;
               white-space: pre-wrap;
               word-break: break-word;
-              margin-bottom: 10px;
+              margin-bottom: 11px;
             }
             .preview-img {
               width: 100%;
-              border-radius: 12px;
-              margin-top: 10px;
+              border-radius: 13px;
+              margin-top: 11px;
               display: none;
               border: 1px solid rgba(56, 189, 248, 0.35);
             }
             .hist-item {
-              background: rgba(15, 23, 42, 0.8);
-              border-left: 3px solid #a855f7;
-              border-radius: 10px;
-              padding: 9px 10px;
+              background: rgba(11, 17, 32, 0.88);
+              border: 1px solid rgba(148, 163, 184, 0.16);
+              border-left-width: 4px;
+              border-left-color: #a855f7;
+              border-radius: 12px;
+              padding: 10px 11px;
               margin-top: 8px;
               font-size: 12px;
             }
             .hist-top {
               display: flex;
               justify-content: space-between;
-              color: #38bdf8;
+              align-items: center;
+              color: #7dd3fc;
               font-weight: 700;
               font-size: 11px;
-              margin-bottom: 4px;
+              margin-bottom: 5px;
             }
           </style>
         </head>
         <body>
-          <div class="glass">
-            <h3 class="title">Pro AI Prompt Stüdyosu</h3>
-            <div class="sub">Kısa fikrini profesyonel Görsel, Suno Müzik, Video veya Uygulama istemine dönüştür.</div>
+          <div class="hero">
+            <div class="hero-icon">
+              <svg class="ico-lg" viewBox="0 0 24 24"><path d="M12 3l2.2 6.2L20.5 11l-6.3 1.9L12 19l-2.2-6.1L3.5 11l6.3-1.8L12 3z"/><circle cx="19" cy="5" r="1.5"/></svg>
+            </div>
+            <div>
+              <h2 class="hero-title">Pro AI Prompt Stüdyosu</h2>
+              <p class="hero-sub">Görsel, Suno Müzik, Video ve Mobil Uygulama istem merkezi</p>
+            </div>
+          </div>
 
-            <div class="cat-grid">
-              <div class="cat-btn active" id="cat-image" onclick="selectCat('image')">Görsel & Kapak</div>
-              <div class="cat-btn" id="cat-music" onclick="selectCat('music')">Suno / Udio Müzik</div>
-              <div class="cat-btn" id="cat-video" onclick="selectCat('video')">Video & Sinema</div>
-              <div class="cat-btn" id="cat-app" onclick="selectCat('app')">Mobil Uygulama</div>
+          <div class="glass">
+            <div class="sec-head">
+              <h3 class="sec-title"><span id="hCatIcon"></span> Kategori Seçin</h3>
+              <span class="pill" id="activeBadge">GÖRSEL</span>
             </div>
 
-            <label>Ana Konu / Fikir</label>
-            <textarea id="ideaInput" placeholder="Örn: Nemrut Dağı'nda gün doğumu veya gurbet temalı bağlamalı uzun hava..."></textarea>
+            <div class="cat-grid">
+              <div class="cat-btn active" id="cat-image" onclick="selectCat('image')"><span id="cIconImg"></span><span>Görsel & Kapak</span></div>
+              <div class="cat-btn" id="cat-music" onclick="selectCat('music')"><span id="cIconMus"></span><span>Suno / Udio Müzik</span></div>
+              <div class="cat-btn" id="cat-video" onclick="selectCat('video')"><span id="cIconVid"></span><span>Video & Sinema</span></div>
+              <div class="cat-btn" id="cat-app" onclick="selectCat('app')"><span id="cIconApp"></span><span>Mobil Uygulama</span></div>
+            </div>
 
-            <label>Tarz & Atmosfer Seçimi</label>
+            <label><span id="lblIdeaIcon"></span> Ana Konu / Fikir</label>
+            <textarea id="ideaInput" placeholder="Örn: Adıyaman Nemrut Dağı heykelleri üzerinde altın saat ışığı..."></textarea>
+
+            <label><span id="lblStyleIcon"></span> Tarz & Atmosfer</label>
             <select id="styleSelect"></select>
 
-            <label>Hızlı Teknik Etiketler (Dokunarak Ekle)</label>
+            <label><span id="lblTagIcon"></span> Hızlı Teknik Etiketler</label>
             <div class="chips" id="tagChips"></div>
 
-            <button class="action" style="width:100%;" onclick="generatePrompt()">Profesyonel Prompt Üret</button>
+            <button class="btn" style="width:100%;" onclick="generatePrompt()"><span id="btnGenIcon"></span><span>Profesyonel Prompt Üret</span></button>
           </div>
 
           <div class="glass" id="outputCard" style="display:none;">
-            <h3 class="title">Üretilen Profesyonel Prompt</h3>
+            <div class="sec-head">
+              <h3 class="sec-title"><span id="lblOutIcon"></span> Üretilen Prompt</h3>
+              <span class="pill">HAZIR</span>
+            </div>
             <div class="result-box" id="promptOutput"></div>
             <div class="btn-row">
-              <button class="action green" onclick="copyPrompt()">Kopyala</button>
-              <button class="action dark" onclick="sharePrompt()">Paylaş</button>
-              <button class="action amber" id="instantRunBtn" onclick="instantRun()">Anında Görsel Üret</button>
+              <button class="btn green" onclick="copyPrompt()"><span id="btnCopyIcon"></span><span>Kopyala</span></button>
+              <button class="btn ghost" onclick="sharePrompt()"><span id="btnShareIcon"></span><span>Paylaş</span></button>
+              <button class="btn amber" id="instantRunBtn" onclick="instantRun()"><span id="btnRunIcon"></span><span id="instantRunText">Görsel Üret</span></button>
             </div>
             <img id="instantPreview" class="preview-img" alt="Önizleme" />
           </div>
 
           <div class="glass">
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-              <h3 class="title" style="margin:0;">Kaydedilen Prompt Geçmişi</h3>
-              <button class="action dark" style="flex:0;min-width:65px;padding:6px 10px;font-size:11px;" onclick="clearHistory()">Temizle</button>
+            <div class="sec-head">
+              <h3 class="sec-title"><span id="lblHistIcon"></span> Kayıtlı Promptlar</h3>
+              <button class="btn danger" style="flex:0;min-width:76px;padding:6px 10px;font-size:11px;" onclick="clearHistory()"><span id="btnClearIcon"></span><span>Temizle</span></button>
             </div>
             <div id="historyList"></div>
           </div>
 
           <script>
+            ${svgIconsHelper()}
+
+            document.getElementById("hCatIcon").innerHTML = ICONS.spark;
+            document.getElementById("cIconImg").innerHTML = ICONS.image;
+            document.getElementById("cIconMus").innerHTML = ICONS.music;
+            document.getElementById("cIconVid").innerHTML = ICONS.video;
+            document.getElementById("cIconApp").innerHTML = ICONS.code;
+            document.getElementById("lblIdeaIcon").innerHTML = ICONS.note;
+            document.getElementById("lblStyleIcon").innerHTML = ICONS.spark;
+            document.getElementById("lblTagIcon").innerHTML = ICONS.spark;
+            document.getElementById("btnGenIcon").innerHTML = ICONS.spark;
+            document.getElementById("lblOutIcon").innerHTML = ICONS.code;
+            document.getElementById("btnCopyIcon").innerHTML = ICONS.copy;
+            document.getElementById("btnShareIcon").innerHTML = ICONS.share;
+            document.getElementById("btnRunIcon").innerHTML = ICONS.play;
+            document.getElementById("lblHistIcon").innerHTML = ICONS.history;
+            document.getElementById("btnClearIcon").innerHTML = ICONS.trash;
+
             let currentCat = "image";
             let selectedTags = new Set();
             let lastGenerated = "";
@@ -298,8 +452,9 @@ object BuiltInTemplates {
 
             const presets = {
               image: {
+                badge: "GÖRSEL",
                 placeholder: "Örn: Adıyaman Nemrut Dağı heykelleri üzerinde altın saat gün batımı...",
-                runLabel: "Anında Görsel Üret",
+                runLabel: "Görsel Üret",
                 styles: [
                   { label: "Fotogerçekçi & Sinematik (8K)", val: "photorealistic, cinematic lighting, golden hour, 8k resolution, ultra detailed, shot on 35mm lens, depth of field" },
                   { label: "Ürün & Reklam Afişi", val: "commercial product photography, studio rim lighting, clean modern luxury background, sharp focus, high contrast, advertising poster style" },
@@ -309,8 +464,9 @@ object BuiltInTemplates {
                 tags: ["Altın Saat Işığı", "Geniş Açı", "Macro Detay", "Dramatik Gökyüzü", "Stüdyo Işığı", "Sığ Alan Derinliği", "Minimalist", "Lüks Doku"]
               },
               music: {
+                badge: "SUNO / UDİO",
                 placeholder: "Örn: Gurbet, sıla hasreti ve toprak kokusu anlatan duygusal türkü...",
-                runLabel: "Suno İçin Kopyala",
+                runLabel: "Suno Kopyala",
                 styles: [
                   { label: "Anadolu Türküsü & Bağlama", val: "Anatolian Turkish folk, solo baglama saz, ney flute, warm acoustic percussion, emotional male vocals, authentic traditional arrangement, 78 BPM" },
                   { label: "Damar Arabesk & Yaylılar", val: "Turkish arabesque ballad, lush string orchestra, deep oud and kanun, passionate soulful vocals, dramatic reverb, slow tempo 68 BPM" },
@@ -320,8 +476,9 @@ object BuiltInTemplates {
                 tags: ["Divan Sazı", "Ney Taksimi", "Duygusal Vokal", "Yaylı Grubu", "Kemençe", "Kanun", "Ağır Tempo", "Canlı Konser Akustiği"]
               },
               video: {
+                badge: "VİDEO / SİNEMA",
                 placeholder: "Örn: Zeytin bahçesinde sabah sisi içinde drone ile süzülen kamera...",
-                runLabel: "Kareyi Görselleştir",
+                runLabel: "Kare Üret",
                 styles: [
                   { label: "Drone Havadan Çekim", val: "Smooth aerial FPV drone tracking shot, sweeping landscape reveal, 4k 60fps cinematic color grading, natural atmospheric haze" },
                   { label: "Ticari Tanıtım & Reklam", val: "High-end commercial video b-roll, slow motion 120fps, dynamic camera push-in, crisp studio reflections, modern color grade" },
@@ -330,8 +487,9 @@ object BuiltInTemplates {
                 tags: ["Ağır Çekim 120fps", "Drone Takip", "Sinematik Renk", "Gece Işıkları", "Dolly Zoom", "Doğal Sis"]
               },
               app: {
+                badge: "MOBİL UYGULAMA",
                 placeholder: "Örn: Barkodlu stok takip, müşteri borç defteri ve WhatsApp fiş gönderme uygulaması...",
-                runLabel: "Uygulamayı Kodla",
+                runLabel: "Kodu Üret",
                 styles: [
                   { label: "Koyu Tema Glassmorphism Mobil Arayüz", val: "Modern dark glassmorphism mobile-first UI, responsive cards, smooth touch buttons, localStorage database persistence, Turkish interface" },
                   { label: "Esnaf & Ticari Yönetim Paneli", val: "Clean commercial dashboard UI, quick search filter, summary KPI cards, WhatsApp share integration, offline localStorage CRUD" },
@@ -348,8 +506,9 @@ object BuiltInTemplates {
               document.getElementById("cat-" + cat).classList.add("active");
 
               const cfg = presets[cat];
+              document.getElementById("activeBadge").innerText = cfg.badge;
               document.getElementById("ideaInput").placeholder = cfg.placeholder;
-              document.getElementById("instantRunBtn").innerText = cfg.runLabel;
+              document.getElementById("instantRunText").innerText = cfg.runLabel;
               document.getElementById("instantPreview").style.display = "none";
 
               const sel = document.getElementById("styleSelect");
@@ -404,11 +563,7 @@ object BuiltInTemplates {
 
             function copyPrompt() {
               if (!lastGenerated) return;
-              if (window.AndroidBridge) {
-                window.AndroidBridge.copyText(lastGenerated);
-              } else if (navigator.clipboard) {
-                navigator.clipboard.writeText(lastGenerated);
-              }
+              if (window.AndroidBridge) window.AndroidBridge.copyText(lastGenerated);
             }
 
             function sharePrompt() {
@@ -438,8 +593,8 @@ object BuiltInTemplates {
 
             function renderHistory() {
               document.getElementById("historyList").innerHTML = historyDb.map((h, i) =>
-                '<div class="hist-item"><div class="hist-top"><span>' + h.cat + '</span><span style="cursor:pointer;" onclick="copyHist(' + i + ')">Kopyala</span></div><div>' + h.text + '</div></div>'
-              ).join("") || '<div class="sub" style="margin-top:8px;">Henüz kayıtlı istem yok.</div>';
+                '<div class="hist-item"><div class="hist-top"><span>' + ICONS.spark + ' ' + h.cat + '</span><span style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;" onclick="copyHist(' + i + ')">' + ICONS.copy + ' Kopyala</span></div><div>' + h.text + '</div></div>'
+              ).join("") || '<div class="hero-sub" style="margin-top:6px;">Henüz kayıtlı prompt yok.</div>';
             }
 
             function copyHist(idx) {
@@ -467,69 +622,23 @@ object BuiltInTemplates {
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <style>
-            * { box-sizing: border-box; }
-            body {
-              font-family: system-ui, -apple-system, sans-serif;
-              margin: 0;
-              padding: 14px;
-              background: radial-gradient(circle at top right, #1e1b4b, #090d16 55%, #05070d);
-              color: #f8fafc;
-              min-height: 100vh;
-            }
-            .glass {
-              background: rgba(30, 41, 59, 0.72);
-              backdrop-filter: blur(12px);
-              border: 1px solid rgba(148, 163, 184, 0.22);
-              border-radius: 16px;
-              padding: 14px;
-              margin-bottom: 14px;
-              box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
-            }
-            .title {
-              margin: 0 0 8px 0;
-              font-size: 16px;
-              font-weight: 700;
-              background: linear-gradient(90deg, #38bdf8, #a855f7, #f472b6);
-              -webkit-background-clip: text;
-              -webkit-text-fill-color: transparent;
-            }
-            input, textarea, select {
-              width: 100%;
-              padding: 10px 12px;
-              margin-bottom: 10px;
-              border-radius: 12px;
-              border: 1px solid rgba(148, 163, 184, 0.25);
-              background: rgba(15, 23, 42, 0.85);
-              color: #f8fafc;
-              font-size: 13px;
-            }
-            .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
-            button {
-              flex: 1;
-              min-width: 110px;
-              border: none;
-              border-radius: 12px;
-              padding: 10px 14px;
-              font-weight: 700;
-              font-size: 13px;
-              color: #fff;
-              background: linear-gradient(135deg, #2563eb, #7c3aed);
-              cursor: pointer;
-            }
-            button.secondary { background: rgba(51, 65, 85, 0.9); }
+            ${baseVisualStyles()}
             img, video, audio {
               width: 100%;
               border-radius: 14px;
               margin-top: 10px;
               background: #020617;
-              border: 1px solid rgba(56, 189, 248, 0.25);
+              border: 1px solid rgba(56, 189, 248, 0.3);
             }
             img { max-height: 260px; object-fit: cover; }
             video { max-height: 230px; }
             .note-item {
-              background: rgba(15, 23, 42, 0.75);
-              border-left: 3px solid #38bdf8;
-              border-radius: 10px;
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              background: rgba(11, 17, 32, 0.88);
+              border-left: 4px solid #38bdf8;
+              border-radius: 11px;
               padding: 10px;
               margin-top: 8px;
               font-size: 13px;
@@ -537,35 +646,63 @@ object BuiltInTemplates {
           </style>
         </head>
         <body>
+          <div class="hero">
+            <div class="hero-icon" id="heroMedIcon"></div>
+            <div>
+              <h2 class="hero-title">Görsel & Medya Stüdyosu</h2>
+              <p class="hero-sub">AI görsel üretimi, ses/video oynatıcı ve not defteri</p>
+            </div>
+          </div>
+
           <div class="glass">
-            <h3 class="title">Görsel Üretici & Galeri</h3>
+            <div class="sec-head">
+              <h3 class="sec-title"><span id="mImgIcon"></span> Görsel Üretici</h3>
+              <span class="pill">8K STUDIO</span>
+            </div>
             <input id="imgPrompt" placeholder="Görsel tarifi yaz (ör. modern stüdyo, gün batımı bahçe)..." />
             <div class="btn-row">
-              <button onclick="genImage()">Görsel Üret</button>
-              <button class="secondary" onclick="shareImgUrl()">Paylaş</button>
+              <button class="btn" onclick="genImage()"><span id="mGenIcon"></span><span>Görsel Üret</span></button>
+              <button class="btn ghost" onclick="shareImgUrl()"><span id="mShrIcon"></span><span>Paylaş</span></button>
             </div>
             <img id="genImg" alt="Üretilen görsel burada görünür" />
           </div>
 
           <div class="glass">
-            <h3 class="title">Müzik & Video Oynatıcı</h3>
+            <div class="sec-head">
+              <h3 class="sec-title"><span id="mPlyIcon"></span> Müzik & Video Oynatıcı</h3>
+              <span class="pill">MP3 / M3U8</span>
+            </div>
             <input id="mediaUrl" placeholder="Müzik (MP3/OGG) veya Video / M3U8 URL yapıştır..." />
             <div class="btn-row">
-              <button onclick="playAudio()">Müzik / Ses Çal</button>
-              <button onclick="playVideo()">Video / Yayın Aç</button>
+              <button class="btn green" onclick="playAudio()"><span id="mAudIcon"></span><span>Ses Çal</span></button>
+              <button class="btn" onclick="playVideo()"><span id="mVidIcon"></span><span>Video Aç</span></button>
             </div>
             <audio id="audioBox" controls></audio>
             <video id="videoBox" controls playsinline></video>
           </div>
 
           <div class="glass">
-            <h3 class="title">Hızlı Not & Fikir Defteri</h3>
+            <div class="sec-head">
+              <h3 class="sec-title"><span id="mNotIcon"></span> Hızlı Not Defteri</h3>
+              <span class="pill" id="noteCount">0 NOT</span>
+            </div>
             <input id="quickNote" placeholder="Yeni fikir veya not ekle..." />
-            <button onclick="addNote()">Kaydet</button>
+            <button class="btn" style="width:100%;" onclick="addNote()"><span id="mSaveIcon"></span><span>Notu Kaydet</span></button>
             <div id="notesList"></div>
           </div>
 
           <script>
+            ${svgIconsHelper()}
+            document.getElementById("heroMedIcon").innerHTML = ICONS.image;
+            document.getElementById("mImgIcon").innerHTML = ICONS.image;
+            document.getElementById("mGenIcon").innerHTML = ICONS.spark;
+            document.getElementById("mShrIcon").innerHTML = ICONS.share;
+            document.getElementById("mPlyIcon").innerHTML = ICONS.music;
+            document.getElementById("mAudIcon").innerHTML = ICONS.music;
+            document.getElementById("mVidIcon").innerHTML = ICONS.video;
+            document.getElementById("mNotIcon").innerHTML = ICONS.note;
+            document.getElementById("mSaveIcon").innerHTML = ICONS.note;
+
             let lastImgUrl = "";
             let notes = JSON.parse(localStorage.getItem("studio_notes") || "[]");
 
@@ -604,8 +741,9 @@ object BuiltInTemplates {
 
             function renderNotes() {
               localStorage.setItem("studio_notes", JSON.stringify(notes));
+              document.getElementById("noteCount").innerText = notes.length + " NOT";
               document.getElementById("notesList").innerHTML = notes.map(n =>
-                '<div class="note-item">' + n + '</div>'
+                '<div class="note-item">' + ICONS.note + '<span>' + n + '</span></div>'
               ).join("");
             }
 
@@ -630,29 +768,41 @@ object BuiltInTemplates {
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <style>
-            body { font-family: system-ui, sans-serif; margin:0; background:#090d16; color:#f8fafc; padding:14px; }
-            .glass { background: rgba(30, 41, 59, 0.78); border: 1px solid rgba(148,163,184,0.2); border-radius:16px; padding:14px; }
-            .top { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
-            .badge { background: linear-gradient(135deg, #2563eb, #7c3aed); padding:6px 12px; border-radius:999px; font-size:12px; font-weight:700; }
-            input { width:100%; box-sizing:border-box; padding:10px; margin-bottom:12px; border-radius:10px; border:1px solid #334155; background:#0f172a; color:#fff; }
+            ${baseVisualStyles()}
             .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-            .card { background:#0f172a; border:1px solid #334155; border-radius:12px; padding:12px; }
-            .price { color:#38bdf8; font-weight:700; margin:6px 0; }
-            button { width:100%; border:none; border-radius:10px; padding:9px; background:#2563eb; color:#fff; font-weight:700; cursor:pointer; }
-            .wa { background: linear-gradient(135deg, #16a34a, #15803d); margin-top:14px; padding:12px; font-size:14px; }
+            .card {
+              background:rgba(11, 17, 32, 0.92);
+              border:1px solid rgba(148, 163, 184, 0.22);
+              border-radius:14px;
+              padding:12px;
+            }
+            .price { color:#38bdf8; font-weight:800; margin:7px 0 10px 0; font-size:14px; }
           </style>
         </head>
         <body>
-          <div class="glass">
-            <div class="top">
-              <h3 style="margin:0;">Katalog & Sipariş</h3>
-              <span class="badge" id="cartCount">Sepet: 0</span>
+          <div class="hero">
+            <div class="hero-icon" id="heroShopIcon"></div>
+            <div>
+              <h2 class="hero-title">Katalog & WhatsApp Sipariş</h2>
+              <p class="hero-sub">Hızlı ürün arama, sepet yönetimi ve tek tuş sipariş</p>
             </div>
-            <input id="searchBox" placeholder="Ürün ara..." oninput="render()" />
+          </div>
+
+          <div class="glass">
+            <div class="sec-head">
+              <h3 class="sec-title"><span id="catHeadIcon"></span> Ürün Kataloğu</h3>
+              <span class="pill" id="cartCount">Sepet: 0</span>
+            </div>
+            <input id="searchBox" placeholder="Ürün adı ile ara..." oninput="render()" />
             <div class="grid" id="productList"></div>
-            <button class="wa" onclick="sendWhatsApp()">WhatsApp ile Sipariş Gönder</button>
+            <button class="btn green" style="width:100%;margin-top:14px;padding:13px;" onclick="sendWhatsApp()"><span id="waIcon"></span><span>WhatsApp ile Sipariş Gönder</span></button>
           </div>
           <script>
+            ${svgIconsHelper()}
+            document.getElementById("heroShopIcon").innerHTML = ICONS.cart;
+            document.getElementById("catHeadIcon").innerHTML = ICONS.box;
+            document.getElementById("waIcon").innerHTML = ICONS.share;
+
             const products = [
               { id:1, name:"Ürün Paketi A", price:450 },
               { id:2, name:"Ürün Paketi B", price:750 },
@@ -666,7 +816,7 @@ object BuiltInTemplates {
               localStorage.setItem("cart_items", JSON.stringify(cart));
               const filtered = products.filter(p => p.name.toLowerCase().includes(q));
               document.getElementById("productList").innerHTML = filtered.map(p =>
-                '<div class="card"><div><b>' + p.name + '</b></div><div class="price">' + p.price + ' TL</div><button onclick="addItem(' + p.id + ')">Sepete Ekle</button></div>'
+                '<div class="card"><div style="display:flex;align-items:center;gap:6px;">' + ICONS.box + '<b>' + p.name + '</b></div><div class="price">' + p.price + ' TL</div><button class="btn" style="width:100%;min-width:0;padding:9px;" onclick="addItem(' + p.id + ')">' + ICONS.cart + '<span>Ekle</span></button></div>'
               ).join("");
             }
             function addItem(id) {
@@ -676,7 +826,10 @@ object BuiltInTemplates {
               if (window.AndroidBridge) window.AndroidBridge.toast(item.name + " sepete eklendi");
             }
             function sendWhatsApp() {
-              if (!cart.length) { alert("Sepet boş"); return; }
+              if (!cart.length) {
+                if (window.AndroidBridge) window.AndroidBridge.toast("Sepet boş");
+                return;
+              }
               const total = cart.reduce((a,b)=>a+b.price,0);
               const lines = cart.map(x=>"- " + x.name + " (" + x.price + " TL)").join("\n");
               const msg = encodeURIComponent("Yeni Sipariş:\n" + lines + "\nToplam: " + total + " TL");
@@ -695,16 +848,35 @@ object BuiltInTemplates {
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <style>
-            body { font-family: system-ui, sans-serif; margin:0; background:#090d16; color:#f8fafc; padding:14px; }
-            .glass { background: rgba(30, 41, 59, 0.78); border: 1px solid rgba(148,163,184,0.2); border-radius:16px; padding:14px; }
-            input, select, button { width:100%; box-sizing:border-box; padding:10px; margin-bottom:8px; border-radius:10px; border:1px solid #334155; background:#0f172a; color:#fff; }
-            button { background: linear-gradient(135deg, #2563eb, #7c3aed); border:none; font-weight:700; cursor:pointer; }
-            .order { background:#0f172a; border-left:4px solid #38bdf8; padding:10px; border-radius:10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; }
+            ${baseVisualStyles()}
+            .order {
+              background:rgba(11, 17, 32, 0.92);
+              border:1px solid rgba(148, 163, 184, 0.2);
+              border-left:4px solid #38bdf8;
+              padding:11px;
+              border-radius:12px;
+              margin-bottom:8px;
+              display:flex;
+              justify-content:space-between;
+              align-items:center;
+              gap:10px;
+            }
           </style>
         </head>
         <body>
+          <div class="hero">
+            <div class="hero-icon" id="heroOrdIcon"></div>
+            <div>
+              <h2 class="hero-title">Sipariş & Stok Takip</h2>
+              <p class="hero-sub">Kayıt oluşturma, durum güncelleme ve hızlı silme</p>
+            </div>
+          </div>
+
           <div class="glass">
-            <h3 style="margin-top:0;">Sipariş & Stok Takip</h3>
+            <div class="sec-head">
+              <h3 class="sec-title"><span id="ordHeadIcon"></span> Yeni Kayıt</h3>
+              <span class="pill" id="ordCount">0 KAYIT</span>
+            </div>
             <input id="custName" placeholder="Müşteri / Ürün Adı" />
             <input id="orderNote" placeholder="Adet / Tutar / Not" />
             <select id="orderStatus">
@@ -712,15 +884,21 @@ object BuiltInTemplates {
               <option value="Kargoda">Kargoda</option>
               <option value="Teslim Edildi">Teslim Edildi</option>
             </select>
-            <button onclick="addOrder()">Kayıt Ekle</button>
-            <div id="ordersList"></div>
+            <button class="btn" style="width:100%;" onclick="addOrder()"><span id="ordAddIcon"></span><span>Kayıt Ekle</span></button>
+            <div id="ordersList" style="margin-top:12px;"></div>
           </div>
           <script>
+            ${svgIconsHelper()}
+            document.getElementById("heroOrdIcon").innerHTML = ICONS.box;
+            document.getElementById("ordHeadIcon").innerHTML = ICONS.note;
+            document.getElementById("ordAddIcon").innerHTML = ICONS.spark;
+
             let orders = JSON.parse(localStorage.getItem("orders_db") || "[]");
             function saveAndRender() {
               localStorage.setItem("orders_db", JSON.stringify(orders));
+              document.getElementById("ordCount").innerText = orders.length + " KAYIT";
               document.getElementById("ordersList").innerHTML = orders.map((o, idx) =>
-                '<div class="order"><div><b>' + o.name + '</b><br><small>' + o.note + ' • ' + o.status + '</small></div><button style="width:auto;background:#dc2626;" onclick="delOrder(' + idx + ')">Sil</button></div>'
+                '<div class="order"><div><b>' + o.name + '</b><br><small style="color:#94a3b8;">' + o.note + ' • <span style="color:#7dd3fc;">' + o.status + '</span></small></div><button class="btn danger" style="flex:0;min-width:66px;padding:8px 10px;" onclick="delOrder(' + idx + ')">' + ICONS.trash + '<span>Sil</span></button></div>'
               ).join("");
             }
             function addOrder() {
@@ -747,27 +925,51 @@ object BuiltInTemplates {
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <style>
-            body { font-family: system-ui, sans-serif; margin:0; background:#090d16; color:#f8fafc; padding:12px; }
-            .glass { background: rgba(30, 41, 59, 0.78); border: 1px solid rgba(148,163,184,0.2); border-radius:16px; padding:12px; }
-            video { width:100%; max-height:220px; background:#000; border-radius:12px; }
-            .row { display:flex; gap:8px; margin:10px 0; }
-            input { flex:1; padding:8px; border-radius:10px; border:1px solid #334155; background:#0f172a; color:#fff; }
-            button { padding:8px 12px; border:none; border-radius:10px; background: linear-gradient(135deg, #2563eb, #7c3aed); color:#fff; font-weight:700; }
-            button:focus { outline:3px solid #38bdf8; }
-            .ch { padding:10px; margin-bottom:6px; background:#0f172a; border-radius:10px; display:flex; justify-content:space-between; }
+            ${baseVisualStyles()}
+            video { width:100%; max-height:220px; background:#000; border-radius:14px; border:1px solid rgba(56, 189, 248, 0.3); }
+            .row { display:flex; gap:8px; margin:10px 0; align-items:stretch; }
+            .row input { flex:1; margin-bottom:0; }
+            .ch {
+              width:100%;
+              display:flex;
+              justify-content:space-between;
+              align-items:center;
+              padding:11px 12px;
+              margin-bottom:7px;
+              background:rgba(11, 17, 32, 0.92);
+              border:1px solid rgba(148, 163, 184, 0.22);
+              border-radius:12px;
+              color:#f8fafc;
+              font-weight:700;
+              cursor:pointer;
+            }
+            .ch:focus { outline:3px solid #38bdf8; }
           </style>
         </head>
         <body>
+          <div class="hero">
+            <div class="hero-icon" id="heroTvIcon"></div>
+            <div>
+              <h2 class="hero-title">TV & Radyo Oynatıcı</h2>
+              <p class="hero-sub">Canlı akış, M3U/yayın listesi ve kumanda odaklı kontrol</p>
+            </div>
+          </div>
+
           <div class="glass">
             <video id="player" controls autoplay></video>
-            <div id="nowPlaying" style="margin:6px 0;font-size:13px;color:#38bdf8;">Kanal seçin</div>
+            <div id="nowPlaying" style="display:flex;align-items:center;gap:6px;margin:9px 0;font-size:13px;font-weight:700;color:#7dd3fc;"></div>
             <div class="row">
               <input id="m3uUrl" placeholder="Yayın veya M3U URL yapıştır..." />
-              <button onclick="addStream()">Ekle</button>
+              <button class="btn" style="flex:0;min-width:86px;margin-bottom:0;" onclick="addStream()"><span id="tvAddIcon"></span><span>Ekle</span></button>
             </div>
-            <div id="channels"></div>
+            <div id="channels" style="margin-top:10px;"></div>
           </div>
           <script>
+            ${svgIconsHelper()}
+            document.getElementById("heroTvIcon").innerHTML = ICONS.tv;
+            document.getElementById("tvAddIcon").innerHTML = ICONS.spark;
+            document.getElementById("nowPlaying").innerHTML = ICONS.tv + '<span>Kanal seçin</span>';
+
             let channels = JSON.parse(localStorage.getItem("tv_channels") || "[]");
             if (!channels.length) {
               channels = [
@@ -778,12 +980,12 @@ object BuiltInTemplates {
             function renderCh() {
               localStorage.setItem("tv_channels", JSON.stringify(channels));
               document.getElementById("channels").innerHTML = channels.map((c, i) =>
-                '<button class="ch" style="width:100%;text-align:left;" onclick="playCh(' + i + ')"><span>' + c.title + '</span><small>Oynat</small></button>'
+                '<button class="ch" onclick="playCh(' + i + ')"><span style="display:flex;align-items:center;gap:8px;">' + ICONS.tv + '<span>' + c.title + '</span></span><span class="pill" style="display:inline-flex;align-items:center;gap:4px;">' + ICONS.play + ' Oynat</span></button>'
               ).join("");
             }
             function playCh(i) {
               const c = channels[i];
-              document.getElementById("nowPlaying").innerText = "Yayın: " + c.title;
+              document.getElementById("nowPlaying").innerHTML = ICONS.play + '<span>Yayın: ' + c.title + '</span>';
               if (c.url) {
                 const v = document.getElementById("player");
                 v.src = c.url;
@@ -853,7 +1055,7 @@ fun AiStudioApkScreen() {
         mutableStateListOf(
             ChatMessage(
                 "assistant",
-                "AI Studio Süper Stüdyo v" + CURRENT_APP_VERSION + " hazır! Pro Prompt Stüdyosu (Görsel, Suno Müzik, Video ve Mobil Uygulama istem üretici), medya stüdyosu, hazır şablonlar ve tek tuşla GitHub APK üreticisi aktif."
+                "AI Studio Süper Stüdyo v" + CURRENT_APP_VERSION + " hazır! Doğrudan APK indirme (DownloadManager), SVG simgeli şablonlar, Pro Prompt Stüdyosu ve tek tuşla GitHub APK üreticisi aktif."
             )
         )
     }
@@ -964,13 +1166,15 @@ fun AiStudioApkScreen() {
                         Button(
                             onClick = {
                                 updateInfoUrl?.let { u ->
-                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u)))
+                                    startApkDirectDownload(context, u)
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFF1E3A8A)),
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
                         ) {
-                            Text("Güncellemeyi İndir", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Doğrudan İndir", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -1165,6 +1369,7 @@ fun AiStudioApkScreen() {
                             previewVersion++
                             activeTab = 1
                         },
+                        icon = { Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(15.dp)) },
                         label = { Text("Prompt Üretici", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                     )
                     SuggestionChip(
@@ -1174,6 +1379,7 @@ fun AiStudioApkScreen() {
                             previewVersion++
                             activeTab = 1
                         },
+                        icon = { Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(15.dp)) },
                         label = { Text("Görsel & Medya", fontSize = 11.sp) }
                     )
                     SuggestionChip(
@@ -1183,6 +1389,7 @@ fun AiStudioApkScreen() {
                             previewVersion++
                             activeTab = 1
                         },
+                        icon = { Icon(Icons.Default.ShoppingCart, contentDescription = null, modifier = Modifier.size(15.dp)) },
                         label = { Text("E-Ticaret", fontSize = 11.sp) }
                     )
                     SuggestionChip(
@@ -1192,6 +1399,7 @@ fun AiStudioApkScreen() {
                             previewVersion++
                             activeTab = 1
                         },
+                        icon = { Icon(Icons.Default.Inventory, contentDescription = null, modifier = Modifier.size(15.dp)) },
                         label = { Text("Sipariş Takip", fontSize = 11.sp) }
                     )
                     SuggestionChip(
@@ -1201,6 +1409,7 @@ fun AiStudioApkScreen() {
                             previewVersion++
                             activeTab = 1
                         },
+                        icon = { Icon(Icons.Default.Tv, contentDescription = null, modifier = Modifier.size(15.dp)) },
                         label = { Text("TV & Radyo", fontSize = 11.sp) }
                     )
                 }
@@ -1293,9 +1502,11 @@ fun AiStudioApkScreen() {
                                     if (urlMatch != null) {
                                         Spacer(modifier = Modifier.height(8.dp))
                                         Button(onClick = {
-                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(urlMatch)))
+                                            startApkDirectDownload(context, urlMatch)
                                         }) {
-                                            Text("GitHub Releases / APK Sayfasını Aç", fontSize = 12.sp)
+                                            Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Spacer(Modifier.width(4.dp))
+                                            Text("APK İndir / Releases Aç", fontSize = 12.sp)
                                         }
                                     }
                                 }
