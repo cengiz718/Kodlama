@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.util.Base64
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -47,11 +48,14 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
-const val CURRENT_APP_VERSION = "8.0"
+const val CURRENT_APP_VERSION = "8.1"
 
 data class ChatMessage(val role: String, val content: String)
 
-class NativeBridge(private val context: Context) {
+class NativeBridge(
+    private val context: Context,
+    private val onSendPromptToAi: ((String) -> Unit)? = null
+) {
     @JavascriptInterface
     fun toast(msg: String) {
         (context as? ComponentActivity)?.runOnUiThread {
@@ -78,9 +82,384 @@ class NativeBridge(private val context: Context) {
             context.startActivity(Intent.createChooser(intent, "Paylaş"))
         }
     }
+
+    @JavascriptInterface
+    fun buildAppFromPrompt(promptText: String) {
+        (context as? ComponentActivity)?.runOnUiThread {
+            onSendPromptToAi?.invoke(promptText)
+        }
+    }
 }
 
 object BuiltInTemplates {
+    fun promptStudioTemplate(): String = """
+        <!DOCTYPE html>
+        <html lang="tr">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            * { box-sizing: border-box; }
+            body {
+              font-family: system-ui, -apple-system, sans-serif;
+              margin: 0;
+              padding: 14px;
+              background: radial-gradient(circle at top left, #1e1b4b, #090d16 55%, #05070d);
+              color: #f8fafc;
+              min-height: 100vh;
+            }
+            .glass {
+              background: rgba(30, 41, 59, 0.76);
+              backdrop-filter: blur(12px);
+              border: 1px solid rgba(148, 163, 184, 0.22);
+              border-radius: 16px;
+              padding: 14px;
+              margin-bottom: 14px;
+              box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+            }
+            .title {
+              margin: 0 0 6px 0;
+              font-size: 16px;
+              font-weight: 800;
+              background: linear-gradient(90deg, #38bdf8, #a855f7, #f472b6);
+              -webkit-background-clip: text;
+              -webkit-text-fill-color: transparent;
+            }
+            .sub {
+              font-size: 12px;
+              color: #94a3b8;
+              margin-bottom: 12px;
+            }
+            .cat-grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 8px;
+              margin-bottom: 12px;
+            }
+            .cat-btn {
+              padding: 10px 8px;
+              border-radius: 12px;
+              border: 1px solid rgba(148, 163, 184, 0.25);
+              background: rgba(15, 23, 42, 0.85);
+              color: #cbd5e1;
+              font-size: 12px;
+              font-weight: 700;
+              cursor: pointer;
+              text-align: center;
+            }
+            .cat-btn.active {
+              border-color: #38bdf8;
+              background: linear-gradient(135deg, rgba(37,99,235,0.45), rgba(124,58,237,0.45));
+              color: #ffffff;
+            }
+            label {
+              display: block;
+              font-size: 11px;
+              font-weight: 700;
+              color: #7dd3fc;
+              margin-bottom: 4px;
+              text-transform: uppercase;
+              letter-spacing: 0.4px;
+            }
+            input, textarea, select {
+              width: 100%;
+              padding: 10px 12px;
+              margin-bottom: 10px;
+              border-radius: 12px;
+              border: 1px solid rgba(148, 163, 184, 0.25);
+              background: rgba(15, 23, 42, 0.9);
+              color: #f8fafc;
+              font-size: 13px;
+            }
+            textarea { min-height: 76px; resize: vertical; }
+            .chips {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 6px;
+              margin-bottom: 12px;
+            }
+            .chip {
+              padding: 6px 10px;
+              border-radius: 999px;
+              font-size: 11px;
+              font-weight: 600;
+              background: rgba(51, 65, 85, 0.75);
+              border: 1px solid rgba(148, 163, 184, 0.25);
+              color: #e2e8f0;
+              cursor: pointer;
+            }
+            .chip.selected {
+              background: #0284c7;
+              border-color: #38bdf8;
+              color: #fff;
+            }
+            .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+            button.action {
+              flex: 1;
+              min-width: 115px;
+              border: none;
+              border-radius: 12px;
+              padding: 11px 12px;
+              font-weight: 700;
+              font-size: 12px;
+              color: #fff;
+              background: linear-gradient(135deg, #2563eb, #7c3aed);
+              cursor: pointer;
+            }
+            button.action.green { background: linear-gradient(135deg, #059669, #10b981); }
+            button.action.amber { background: linear-gradient(135deg, #d97706, #ea580c); }
+            button.action.dark { background: rgba(51, 65, 85, 0.95); }
+            .result-box {
+              background: #050811;
+              border: 1px solid #38bdf8;
+              border-radius: 12px;
+              padding: 12px;
+              font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+              font-size: 12px;
+              line-height: 1.5;
+              color: #e0f2fe;
+              white-space: pre-wrap;
+              word-break: break-word;
+              margin-bottom: 10px;
+            }
+            .preview-img {
+              width: 100%;
+              border-radius: 12px;
+              margin-top: 10px;
+              display: none;
+              border: 1px solid rgba(56, 189, 248, 0.35);
+            }
+            .hist-item {
+              background: rgba(15, 23, 42, 0.8);
+              border-left: 3px solid #a855f7;
+              border-radius: 10px;
+              padding: 9px 10px;
+              margin-top: 8px;
+              font-size: 12px;
+            }
+            .hist-top {
+              display: flex;
+              justify-content: space-between;
+              color: #38bdf8;
+              font-weight: 700;
+              font-size: 11px;
+              margin-bottom: 4px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="glass">
+            <h3 class="title">Pro AI Prompt Stüdyosu</h3>
+            <div class="sub">Kısa fikrini profesyonel Görsel, Suno Müzik, Video veya Uygulama istemine dönüştür.</div>
+
+            <div class="cat-grid">
+              <div class="cat-btn active" id="cat-image" onclick="selectCat('image')">Görsel & Kapak</div>
+              <div class="cat-btn" id="cat-music" onclick="selectCat('music')">Suno / Udio Müzik</div>
+              <div class="cat-btn" id="cat-video" onclick="selectCat('video')">Video & Sinema</div>
+              <div class="cat-btn" id="cat-app" onclick="selectCat('app')">Mobil Uygulama</div>
+            </div>
+
+            <label>Ana Konu / Fikir</label>
+            <textarea id="ideaInput" placeholder="Örn: Nemrut Dağı'nda gün doğumu veya gurbet temalı bağlamalı uzun hava..."></textarea>
+
+            <label>Tarz & Atmosfer Seçimi</label>
+            <select id="styleSelect"></select>
+
+            <label>Hızlı Teknik Etiketler (Dokunarak Ekle)</label>
+            <div class="chips" id="tagChips"></div>
+
+            <button class="action" style="width:100%;" onclick="generatePrompt()">Profesyonel Prompt Üret</button>
+          </div>
+
+          <div class="glass" id="outputCard" style="display:none;">
+            <h3 class="title">Üretilen Profesyonel Prompt</h3>
+            <div class="result-box" id="promptOutput"></div>
+            <div class="btn-row">
+              <button class="action green" onclick="copyPrompt()">Kopyala</button>
+              <button class="action dark" onclick="sharePrompt()">Paylaş</button>
+              <button class="action amber" id="instantRunBtn" onclick="instantRun()">Anında Görsel Üret</button>
+            </div>
+            <img id="instantPreview" class="preview-img" alt="Önizleme" />
+          </div>
+
+          <div class="glass">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <h3 class="title" style="margin:0;">Kaydedilen Prompt Geçmişi</h3>
+              <button class="action dark" style="flex:0;min-width:65px;padding:6px 10px;font-size:11px;" onclick="clearHistory()">Temizle</button>
+            </div>
+            <div id="historyList"></div>
+          </div>
+
+          <script>
+            let currentCat = "image";
+            let selectedTags = new Set();
+            let lastGenerated = "";
+            let historyDb = JSON.parse(localStorage.getItem("pro_prompt_history") || "[]");
+
+            const presets = {
+              image: {
+                placeholder: "Örn: Adıyaman Nemrut Dağı heykelleri üzerinde altın saat gün batımı...",
+                runLabel: "Anında Görsel Üret",
+                styles: [
+                  { label: "Fotogerçekçi & Sinematik (8K)", val: "photorealistic, cinematic lighting, golden hour, 8k resolution, ultra detailed, shot on 35mm lens, depth of field" },
+                  { label: "Ürün & Reklam Afişi", val: "commercial product photography, studio rim lighting, clean modern luxury background, sharp focus, high contrast, advertising poster style" },
+                  { label: "3D Modern İllüstrasyon", val: "3d isometric render, octane render, vibrant studio colors, smooth glossy textures, soft global illumination" },
+                  { label: "Yağlı Boya & Sanatsal", val: "dramatic oil painting style, rich impasto brushstrokes, atmospheric fog, museum masterpiece lighting" }
+                ],
+                tags: ["Altın Saat Işığı", "Geniş Açı", "Macro Detay", "Dramatik Gökyüzü", "Stüdyo Işığı", "Sığ Alan Derinliği", "Minimalist", "Lüks Doku"]
+              },
+              music: {
+                placeholder: "Örn: Gurbet, sıla hasreti ve toprak kokusu anlatan duygusal türkü...",
+                runLabel: "Suno İçin Kopyala",
+                styles: [
+                  { label: "Anadolu Türküsü & Bağlama", val: "Anatolian Turkish folk, solo baglama saz, ney flute, warm acoustic percussion, emotional male vocals, authentic traditional arrangement, 78 BPM" },
+                  { label: "Damar Arabesk & Yaylılar", val: "Turkish arabesque ballad, lush string orchestra, deep oud and kanun, passionate soulful vocals, dramatic reverb, slow tempo 68 BPM" },
+                  { label: "Uzun Hava & Bozlak (Serbest Ritim)", val: "Traditional Turkish Uzun Hava, Bozlak style, free-rhythm improvised vocal lament, solo divan sazi, raw emotional storytelling, atmospheric hall reverb" },
+                  { label: "Modern Özgün & Akustik", val: "Contemporary Turkish ozgun music, acoustic guitar, baglama fusion, warm bassline, poetic vocals, studio master quality, 90 BPM" }
+                ],
+                tags: ["Divan Sazı", "Ney Taksimi", "Duygusal Vokal", "Yaylı Grubu", "Kemençe", "Kanun", "Ağır Tempo", "Canlı Konser Akustiği"]
+              },
+              video: {
+                placeholder: "Örn: Zeytin bahçesinde sabah sisi içinde drone ile süzülen kamera...",
+                runLabel: "Kareyi Görselleştir",
+                styles: [
+                  { label: "Drone Havadan Çekim", val: "Smooth aerial FPV drone tracking shot, sweeping landscape reveal, 4k 60fps cinematic color grading, natural atmospheric haze" },
+                  { label: "Ticari Tanıtım & Reklam", val: "High-end commercial video b-roll, slow motion 120fps, dynamic camera push-in, crisp studio reflections, modern color grade" },
+                  { label: "Belgesel & Hikaye Anlatımı", val: "Cinematic documentary cinematography, natural window lighting, handheld subtle motion, authentic film grain, Kodak Vision3 look" }
+                ],
+                tags: ["Ağır Çekim 120fps", "Drone Takip", "Sinematik Renk", "Gece Işıkları", "Dolly Zoom", "Doğal Sis"]
+              },
+              app: {
+                placeholder: "Örn: Barkodlu stok takip, müşteri borç defteri ve WhatsApp fiş gönderme uygulaması...",
+                runLabel: "Uygulamayı Kodla",
+                styles: [
+                  { label: "Koyu Tema Glassmorphism Mobil Arayüz", val: "Modern dark glassmorphism mobile-first UI, responsive cards, smooth touch buttons, localStorage database persistence, Turkish interface" },
+                  { label: "Esnaf & Ticari Yönetim Paneli", val: "Clean commercial dashboard UI, quick search filter, summary KPI cards, WhatsApp share integration, offline localStorage CRUD" },
+                  { label: "Medya & Oynatıcı Uygulaması", val: "Sleek dark media player UI, playlist management, fullscreen responsive player, D-pad & touch friendly controls" }
+                ],
+                tags: ["WhatsApp Sipariş", "localStorage Kayıt", "Arama Filtresi", "Toplam Hesaplama", "PDF/Metin Paylaş", "Büyük Butonlar"]
+              }
+            };
+
+            function selectCat(cat) {
+              currentCat = cat;
+              selectedTags.clear();
+              document.querySelectorAll(".cat-btn").forEach(b => b.classList.remove("active"));
+              document.getElementById("cat-" + cat).classList.add("active");
+
+              const cfg = presets[cat];
+              document.getElementById("ideaInput").placeholder = cfg.placeholder;
+              document.getElementById("instantRunBtn").innerText = cfg.runLabel;
+              document.getElementById("instantPreview").style.display = "none";
+
+              const sel = document.getElementById("styleSelect");
+              sel.innerHTML = cfg.styles.map(s => '<option value="' + s.val + '">' + s.label + '</option>').join("");
+
+              const chips = document.getElementById("tagChips");
+              chips.innerHTML = cfg.tags.map(t =>
+                '<span class="chip" onclick="toggleTag(this, \'' + t + '\')">+ ' + t + '</span>'
+              ).join("");
+            }
+
+            function toggleTag(el, tag) {
+              if (selectedTags.has(tag)) {
+                selectedTags.delete(tag);
+                el.classList.remove("selected");
+              } else {
+                selectedTags.add(tag);
+                el.classList.add("selected");
+              }
+            }
+
+            function generatePrompt() {
+              const idea = document.getElementById("ideaInput").value.trim();
+              if (!idea) {
+                if (window.AndroidBridge) window.AndroidBridge.toast("Önce kısa bir fikir yazın");
+                return;
+              }
+              const styleVal = document.getElementById("styleSelect").value;
+              const tagsStr = Array.from(selectedTags).join(", ");
+              let finalPrompt = "";
+
+              if (currentCat === "app") {
+                finalPrompt = "Şu özelliklere sahip eksiksiz, tek dosya mobil uyumlu HTML/CSS/JS uygulaması üret: " +
+                  idea + ". Tasarım stili: " + styleVal +
+                  (tagsStr ? ". Ek özellikler: " + tagsStr : "") + ".";
+              } else if (currentCat === "music") {
+                finalPrompt = "[Style: " + styleVal + (tagsStr ? ", " + tagsStr : "") + "]\n[Theme / Lyrics Idea: " + idea + "]\n[Structure: Intro - Verse 1 - Chorus - Instrumental Solo - Verse 2 - Chorus - Outro]";
+              } else {
+                finalPrompt = idea + ", " + styleVal + (tagsStr ? ", " + tagsStr : "");
+              }
+
+              lastGenerated = finalPrompt;
+              document.getElementById("promptOutput").innerText = finalPrompt;
+              document.getElementById("outputCard").style.display = "block";
+
+              const catNames = { image: "Görsel", music: "Suno Müzik", video: "Video", app: "Uygulama" };
+              historyDb.unshift({ cat: catNames[currentCat], text: finalPrompt });
+              if (historyDb.length > 20) historyDb.pop();
+              localStorage.setItem("pro_prompt_history", JSON.stringify(historyDb));
+              renderHistory();
+            }
+
+            function copyPrompt() {
+              if (!lastGenerated) return;
+              if (window.AndroidBridge) {
+                window.AndroidBridge.copyText(lastGenerated);
+              } else if (navigator.clipboard) {
+                navigator.clipboard.writeText(lastGenerated);
+              }
+            }
+
+            function sharePrompt() {
+              if (!lastGenerated) return;
+              if (window.AndroidBridge) window.AndroidBridge.shareText(lastGenerated);
+            }
+
+            function instantRun() {
+              if (!lastGenerated) return;
+              if (currentCat === "app") {
+                if (window.AndroidBridge) {
+                  window.AndroidBridge.toast("Uygulama kodu üretiliyor...");
+                  window.AndroidBridge.buildAppFromPrompt(lastGenerated);
+                }
+                return;
+              }
+              if (currentCat === "music") {
+                copyPrompt();
+                if (window.AndroidBridge) window.AndroidBridge.toast("Suno müzik istemi kopyalandı!");
+                return;
+              }
+              const imgEl = document.getElementById("instantPreview");
+              imgEl.style.display = "block";
+              imgEl.src = "https://image.pollinations.ai/prompt/" + encodeURIComponent(lastGenerated) + "?nologo=true&seed=" + Date.now();
+              if (window.AndroidBridge) window.AndroidBridge.toast("Görsel oluşturuluyor...");
+            }
+
+            function renderHistory() {
+              document.getElementById("historyList").innerHTML = historyDb.map((h, i) =>
+                '<div class="hist-item"><div class="hist-top"><span>' + h.cat + '</span><span style="cursor:pointer;" onclick="copyHist(' + i + ')">Kopyala</span></div><div>' + h.text + '</div></div>'
+              ).join("") || '<div class="sub" style="margin-top:8px;">Henüz kayıtlı istem yok.</div>';
+            }
+
+            function copyHist(idx) {
+              const txt = historyDb[idx]?.text || "";
+              if (txt && window.AndroidBridge) window.AndroidBridge.copyText(txt);
+            }
+
+            function clearHistory() {
+              historyDb = [];
+              localStorage.removeItem("pro_prompt_history");
+              renderHistory();
+            }
+
+            selectCat("image");
+            renderHistory();
+          </script>
+        </body>
+        </html>
+    """.trimIndent()
+
     fun mediaStudioTemplate(): String = """
         <!DOCTYPE html>
         <html lang="tr">
@@ -468,15 +847,34 @@ fun AiStudioApkScreen() {
     var isLoading by remember { mutableStateOf(false) }
     var updateInfoUrl by remember { mutableStateOf<String?>(null) }
 
-    var liveHtmlCode by remember { mutableStateOf(BuiltInTemplates.mediaStudioTemplate()) }
+    var liveHtmlCode by remember { mutableStateOf(BuiltInTemplates.promptStudioTemplate()) }
 
     val messages = remember {
         mutableStateListOf(
             ChatMessage(
                 "assistant",
-                "AI Studio Süper Stüdyo v" + CURRENT_APP_VERSION + " hazır! Görsel üretici, müzik/video oynatıcı, not defteri, şablonlar ve otomatik güncelleme denetleyicisi eklendi."
+                "AI Studio Süper Stüdyo v" + CURRENT_APP_VERSION + " hazır! Pro Prompt Stüdyosu (Görsel, Suno Müzik, Video ve Mobil Uygulama istem üretici), medya stüdyosu, hazır şablonlar ve tek tuşla GitHub APK üreticisi aktif."
             )
         )
+    }
+
+    val runPromptGeneration: (String) -> Unit = { userText ->
+        if (userText.isNotBlank() && !isLoading) {
+            messages.add(ChatMessage("user", userText))
+            isLoading = true
+            activeTab = 0
+            scope.launch {
+                val generated = callLivePreviewAi(userText, liveHtmlCode)
+                messages.add(ChatMessage("assistant", generated))
+                val cleaned = sanitizeAndExtractHtml(generated)
+                if (cleaned.contains("<html", ignoreCase = true)) {
+                    liveHtmlCode = cleaned
+                    previewVersion++
+                    activeTab = 1
+                }
+                isLoading = false
+            }
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -730,7 +1128,12 @@ fun AiStudioApkScreen() {
                                 settings.domStorageEnabled = true
                                 settings.allowFileAccess = true
                                 settings.mediaPlaybackRequiresUserGesture = false
-                                addJavascriptInterface(NativeBridge(ctx), "AndroidBridge")
+                                addJavascriptInterface(
+                                    NativeBridge(ctx) { promptToBuild ->
+                                        runPromptGeneration(promptToBuild)
+                                    },
+                                    "AndroidBridge"
+                                )
                                 webViewClient = WebViewClient()
                                 webChromeClient = WebChromeClient()
                             }
@@ -755,6 +1158,15 @@ fun AiStudioApkScreen() {
                         .padding(horizontal = 10.dp, vertical = 6.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
+                    SuggestionChip(
+                        onClick = {
+                            liveHtmlCode = BuiltInTemplates.promptStudioTemplate()
+                            appTitle = "Pro Prompt Üretici"
+                            previewVersion++
+                            activeTab = 1
+                        },
+                        label = { Text("Prompt Üretici", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                    )
                     SuggestionChip(
                         onClick = {
                             liveHtmlCode = BuiltInTemplates.mediaStudioTemplate()
@@ -917,11 +1329,11 @@ fun AiStudioApkScreen() {
                         if (promptInput.isBlank() || isLoading) return@IconButton
                         val userText = promptInput.trim()
                         promptInput = ""
-                        messages.add(ChatMessage("user", userText))
-                        isLoading = true
 
-                        scope.launch {
-                            if (userText.startsWith("DOSYA_SIL:", ignoreCase = true)) {
+                        if (userText.startsWith("DOSYA_SIL:", ignoreCase = true)) {
+                            messages.add(ChatMessage("user", userText))
+                            isLoading = true
+                            scope.launch {
                                 val target = userText.substringAfter(":").trim()
                                 val res = if (ghToken.isBlank() || ghRepo.isBlank()) {
                                     "Önce Ayarlar'dan GitHub Token ve Depo Adı girin."
@@ -930,19 +1342,11 @@ fun AiStudioApkScreen() {
                                 }
                                 messages.add(ChatMessage("assistant", res))
                                 isLoading = false
-                                return@launch
                             }
-
-                            val generated = callLivePreviewAi(userText, liveHtmlCode)
-                            messages.add(ChatMessage("assistant", generated))
-                            val cleaned = sanitizeAndExtractHtml(generated)
-                            if (cleaned.contains("<html", ignoreCase = true)) {
-                                liveHtmlCode = cleaned
-                                previewVersion++
-                                activeTab = 1
-                            }
-                            isLoading = false
+                            return@IconButton
                         }
+
+                        runPromptGeneration(userText)
                     },
                     modifier = Modifier.background(
                         Brush.horizontalGradient(listOf(Color(0xFF2563EB), Color(0xFF7C3AED))),
@@ -1110,7 +1514,7 @@ private fun uploadSingleFileToGitHub(
         put("message", "AI Studio APK: " + cleanPath)
         put("content", b64)
         put("branch", branch)
-        if (!sha.isNullOrBlank()) put("sha", sha)
+        sha?.let { put("sha", it) }
     }
 
     val req = Request.Builder()
