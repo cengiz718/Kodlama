@@ -584,7 +584,7 @@ fun AiStudioApkScreen() {
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(10.dp),
-                    shape = RoundedCornerShape(16px.dp),
+                    shape = RoundedCornerShape(16.dp),
                     border = BorderStroke(1.dp, Color(0xFF334155)),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B))
                 ) {
@@ -1032,7 +1032,7 @@ suspend fun callLivePreviewAi(userPrompt: String, currentHtml: String): String =
         try {
             val jsonBody = JSONObject().apply {
                 put("model", "openai")
-                put("temperature", 0.25)
+                put("temperature", 0.25.toDouble())
                 put("messages", JSONArray().apply {
                     put(JSONObject().apply {
                         put("role", "system")
