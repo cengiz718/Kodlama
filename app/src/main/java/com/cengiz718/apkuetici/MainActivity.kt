@@ -7,7 +7,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.util.Base64
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -15,6 +14,7 @@ import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -23,19 +23,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Send
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -54,6 +47,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
+
+const val CURRENT_APP_VERSION = "8.0"
 
 data class ChatMessage(val role: String, val content: String)
 
@@ -87,6 +82,169 @@ class NativeBridge(private val context: Context) {
 }
 
 object BuiltInTemplates {
+    fun mediaStudioTemplate(): String = """
+        <!DOCTYPE html>
+        <html lang="tr">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            * { box-sizing: border-box; }
+            body {
+              font-family: system-ui, -apple-system, sans-serif;
+              margin: 0;
+              padding: 14px;
+              background: radial-gradient(circle at top right, #1e1b4b, #090d16 55%, #05070d);
+              color: #f8fafc;
+              min-height: 100vh;
+            }
+            .glass {
+              background: rgba(30, 41, 59, 0.72);
+              backdrop-filter: blur(12px);
+              border: 1px solid rgba(148, 163, 184, 0.22);
+              border-radius: 16px;
+              padding: 14px;
+              margin-bottom: 14px;
+              box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+            }
+            .title {
+              margin: 0 0 8px 0;
+              font-size: 16px;
+              font-weight: 700;
+              background: linear-gradient(90deg, #38bdf8, #a855f7, #f472b6);
+              -webkit-background-clip: text;
+              -webkit-text-fill-color: transparent;
+            }
+            input, textarea, select {
+              width: 100%;
+              padding: 10px 12px;
+              margin-bottom: 10px;
+              border-radius: 12px;
+              border: 1px solid rgba(148, 163, 184, 0.25);
+              background: rgba(15, 23, 42, 0.85);
+              color: #f8fafc;
+              font-size: 13px;
+            }
+            .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+            button {
+              flex: 1;
+              min-width: 110px;
+              border: none;
+              border-radius: 12px;
+              padding: 10px 14px;
+              font-weight: 700;
+              font-size: 13px;
+              color: #fff;
+              background: linear-gradient(135deg, #2563eb, #7c3aed);
+              cursor: pointer;
+            }
+            button.secondary { background: rgba(51, 65, 85, 0.9); }
+            img, video, audio {
+              width: 100%;
+              border-radius: 14px;
+              margin-top: 10px;
+              background: #020617;
+              border: 1px solid rgba(56, 189, 248, 0.25);
+            }
+            img { max-height: 260px; object-fit: cover; }
+            video { max-height: 230px; }
+            .note-item {
+              background: rgba(15, 23, 42, 0.75);
+              border-left: 3px solid #38bdf8;
+              border-radius: 10px;
+              padding: 10px;
+              margin-top: 8px;
+              font-size: 13px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="glass">
+            <h3 class="title">Görsel Üretici & Galeri</h3>
+            <input id="imgPrompt" placeholder="Görsel tarifi yaz (ör. modern stüdyo, gün batımı bahçe)..." />
+            <div class="btn-row">
+              <button onclick="genImage()">Görsel Üret</button>
+              <button class="secondary" onclick="shareImgUrl()">Paylaş</button>
+            </div>
+            <img id="genImg" alt="Üretilen görsel burada görünür" />
+          </div>
+
+          <div class="glass">
+            <h3 class="title">Müzik & Video Oynatıcı</h3>
+            <input id="mediaUrl" placeholder="Müzik (MP3/OGG) veya Video / M3U8 URL yapıştır..." />
+            <div class="btn-row">
+              <button onclick="playAudio()">Müzik / Ses Çal</button>
+              <button onclick="playVideo()">Video / Yayın Aç</button>
+            </div>
+            <audio id="audioBox" controls></audio>
+            <video id="videoBox" controls playsinline></video>
+          </div>
+
+          <div class="glass">
+            <h3 class="title">Hızlı Not & Fikir Defteri</h3>
+            <input id="quickNote" placeholder="Yeni fikir veya not ekle..." />
+            <button onclick="addNote()">Kaydet</button>
+            <div id="notesList"></div>
+          </div>
+
+          <script>
+            let lastImgUrl = "";
+            let notes = JSON.parse(localStorage.getItem("studio_notes") || "[]");
+
+            function genImage() {
+              const p = document.getElementById("imgPrompt").value.trim();
+              if (!p) {
+                if (window.AndroidBridge) window.AndroidBridge.toast("Önce görsel tarifi yazın");
+                return;
+              }
+              const url = "https://image.pollinations.ai/prompt/" + encodeURIComponent(p) + "?nologo=true&seed=" + Date.now();
+              lastImgUrl = url;
+              document.getElementById("genImg").src = url;
+              if (window.AndroidBridge) window.AndroidBridge.toast("Görsel üretiliyor...");
+            }
+
+            function shareImgUrl() {
+              if (!lastImgUrl) return;
+              if (window.AndroidBridge) window.AndroidBridge.shareText(lastImgUrl);
+            }
+
+            function playAudio() {
+              const u = document.getElementById("mediaUrl").value.trim();
+              if (!u) return;
+              const a = document.getElementById("audioBox");
+              a.src = u;
+              a.play().catch(()=>{});
+            }
+
+            function playVideo() {
+              const u = document.getElementById("mediaUrl").value.trim();
+              if (!u) return;
+              const v = document.getElementById("videoBox");
+              v.src = u;
+              v.play().catch(()=>{});
+            }
+
+            function renderNotes() {
+              localStorage.setItem("studio_notes", JSON.stringify(notes));
+              document.getElementById("notesList").innerHTML = notes.map(n =>
+                '<div class="note-item">' + n + '</div>'
+              ).join("");
+            }
+
+            function addNote() {
+              const val = document.getElementById("quickNote").value.trim();
+              if (!val) return;
+              notes.unshift(val);
+              document.getElementById("quickNote").value = "";
+              renderNotes();
+            }
+
+            renderNotes();
+          </script>
+        </body>
+        </html>
+    """.trimIndent()
+
     fun ecommerceTemplate(): String = """
         <!DOCTYPE html>
         <html lang="tr">
@@ -94,25 +252,28 @@ object BuiltInTemplates {
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <style>
-            body { font-family: sans-serif; margin:0; background:#0f172a; color:#f8fafc; padding:14px; }
+            body { font-family: system-ui, sans-serif; margin:0; background:#090d16; color:#f8fafc; padding:14px; }
+            .glass { background: rgba(30, 41, 59, 0.78); border: 1px solid rgba(148,163,184,0.2); border-radius:16px; padding:14px; }
             .top { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
-            .badge { background:#2563eb; padding:6px 12px; border-radius:999px; font-size:12px; font-weight:bold; }
-            input { width:100%; box-sizing:border-box; padding:10px; margin-bottom:12px; border-radius:10px; border:1px solid #334155; background:#1e293b; color:#fff; }
+            .badge { background: linear-gradient(135deg, #2563eb, #7c3aed); padding:6px 12px; border-radius:999px; font-size:12px; font-weight:700; }
+            input { width:100%; box-sizing:border-box; padding:10px; margin-bottom:12px; border-radius:10px; border:1px solid #334155; background:#0f172a; color:#fff; }
             .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-            .card { background:#1e293b; border:1px solid #334155; border-radius:12px; padding:12px; }
-            .price { color:#38bdf8; font-weight:bold; margin:6px 0; }
-            button { width:100%; border:none; border-radius:8px; padding:9px; background:#2563eb; color:#fff; font-weight:bold; cursor:pointer; }
-            .wa { background:#16a34a; margin-top:14px; padding:12px; font-size:15px; }
+            .card { background:#0f172a; border:1px solid #334155; border-radius:12px; padding:12px; }
+            .price { color:#38bdf8; font-weight:700; margin:6px 0; }
+            button { width:100%; border:none; border-radius:10px; padding:9px; background:#2563eb; color:#fff; font-weight:700; cursor:pointer; }
+            .wa { background: linear-gradient(135deg, #16a34a, #15803d); margin-top:14px; padding:12px; font-size:14px; }
           </style>
         </head>
         <body>
-          <div class="top">
-            <h3 style="margin:0;">Katalog & Sipariş</h3>
-            <span class="badge" id="cartCount">Sepet: 0</span>
+          <div class="glass">
+            <div class="top">
+              <h3 style="margin:0;">Katalog & Sipariş</h3>
+              <span class="badge" id="cartCount">Sepet: 0</span>
+            </div>
+            <input id="searchBox" placeholder="Ürün ara..." oninput="render()" />
+            <div class="grid" id="productList"></div>
+            <button class="wa" onclick="sendWhatsApp()">WhatsApp ile Sipariş Gönder</button>
           </div>
-          <input id="searchBox" placeholder="Ürün ara..." oninput="render()" />
-          <div class="grid" id="productList"></div>
-          <button class="wa" onclick="sendWhatsApp()">WhatsApp ile Sipariş Gönder</button>
           <script>
             const products = [
               { id:1, name:"Ürün Paketi A", price:450 },
@@ -156,23 +317,26 @@ object BuiltInTemplates {
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <style>
-            body { font-family: sans-serif; margin:0; background:#0f172a; color:#f8fafc; padding:14px; }
-            input, select, button { width:100%; box-sizing:border-box; padding:10px; margin-bottom:8px; border-radius:8px; border:1px solid #334155; background:#1e293b; color:#fff; }
-            button { background:#2563eb; border:none; font-weight:bold; cursor:pointer; }
-            .order { background:#1e293b; border-left:4px solid #38bdf8; padding:10px; border-radius:8px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; }
+            body { font-family: system-ui, sans-serif; margin:0; background:#090d16; color:#f8fafc; padding:14px; }
+            .glass { background: rgba(30, 41, 59, 0.78); border: 1px solid rgba(148,163,184,0.2); border-radius:16px; padding:14px; }
+            input, select, button { width:100%; box-sizing:border-box; padding:10px; margin-bottom:8px; border-radius:10px; border:1px solid #334155; background:#0f172a; color:#fff; }
+            button { background: linear-gradient(135deg, #2563eb, #7c3aed); border:none; font-weight:700; cursor:pointer; }
+            .order { background:#0f172a; border-left:4px solid #38bdf8; padding:10px; border-radius:10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; }
           </style>
         </head>
         <body>
-          <h3 style="margin-top:0;">Sipariş & Stok Takip</h3>
-          <input id="custName" placeholder="Müşteri / Ürün Adı" />
-          <input id="orderNote" placeholder="Adet / Tutar / Not" />
-          <select id="orderStatus">
-            <option value="Hazırlanıyor">Hazırlanıyor</option>
-            <option value="Kargoda">Kargoda</option>
-            <option value="Teslim Edildi">Teslim Edildi</option>
-          </select>
-          <button onclick="addOrder()">Kayıt Ekle</button>
-          <div id="ordersList"></div>
+          <div class="glass">
+            <h3 style="margin-top:0;">Sipariş & Stok Takip</h3>
+            <input id="custName" placeholder="Müşteri / Ürün Adı" />
+            <input id="orderNote" placeholder="Adet / Tutar / Not" />
+            <select id="orderStatus">
+              <option value="Hazırlanıyor">Hazırlanıyor</option>
+              <option value="Kargoda">Kargoda</option>
+              <option value="Teslim Edildi">Teslim Edildi</option>
+            </select>
+            <button onclick="addOrder()">Kayıt Ekle</button>
+            <div id="ordersList"></div>
+          </div>
           <script>
             let orders = JSON.parse(localStorage.getItem("orders_db") || "[]");
             function saveAndRender() {
@@ -205,23 +369,26 @@ object BuiltInTemplates {
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <style>
-            body { font-family: sans-serif; margin:0; background:#090d16; color:#f8fafc; padding:12px; }
+            body { font-family: system-ui, sans-serif; margin:0; background:#090d16; color:#f8fafc; padding:12px; }
+            .glass { background: rgba(30, 41, 59, 0.78); border: 1px solid rgba(148,163,184,0.2); border-radius:16px; padding:12px; }
             video { width:100%; max-height:220px; background:#000; border-radius:12px; }
             .row { display:flex; gap:8px; margin:10px 0; }
-            input { flex:1; padding:8px; border-radius:8px; border:1px solid #334155; background:#1e293b; color:#fff; }
-            button { padding:8px 12px; border:none; border-radius:8px; background:#2563eb; color:#fff; font-weight:bold; }
+            input { flex:1; padding:8px; border-radius:10px; border:1px solid #334155; background:#0f172a; color:#fff; }
+            button { padding:8px 12px; border:none; border-radius:10px; background: linear-gradient(135deg, #2563eb, #7c3aed); color:#fff; font-weight:700; }
             button:focus { outline:3px solid #38bdf8; }
-            .ch { padding:10px; margin-bottom:6px; background:#1e293b; border-radius:8px; display:flex; justify-content:space-between; }
+            .ch { padding:10px; margin-bottom:6px; background:#0f172a; border-radius:10px; display:flex; justify-content:space-between; }
           </style>
         </head>
         <body>
-          <video id="player" controls autoplay></video>
-          <div id="nowPlaying" style="margin:6px 0;font-size:13px;color:#38bdf8;">Kanal seçin</div>
-          <div class="row">
-            <input id="m3uUrl" placeholder="Yayın veya M3U URL yapıştır..." />
-            <button onclick="addStream()">Ekle</button>
+          <div class="glass">
+            <video id="player" controls autoplay></video>
+            <div id="nowPlaying" style="margin:6px 0;font-size:13px;color:#38bdf8;">Kanal seçin</div>
+            <div class="row">
+              <input id="m3uUrl" placeholder="Yayın veya M3U URL yapıştır..." />
+              <button onclick="addStream()">Ekle</button>
+            </div>
+            <div id="channels"></div>
           </div>
-          <div id="channels"></div>
           <script>
             let channels = JSON.parse(localStorage.getItem("tv_channels") || "[]");
             if (!channels.length) {
@@ -265,7 +432,15 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
+            val studioDarkColors = darkColorScheme(
+                primary = Color(0xFF38BDF8),
+                secondary = Color(0xFFA855F7),
+                background = Color(0xFF090D16),
+                surface = Color(0xFF131B2E),
+                onBackground = Color(0xFFF8FAFC),
+                onSurface = Color(0xFFF8FAFC)
+            )
+            MaterialTheme(colorScheme = studioDarkColors) {
                 AiStudioApkScreen()
             }
         }
@@ -282,9 +457,9 @@ fun AiStudioApkScreen() {
 
     var ghToken by remember { mutableStateOf(prefs.getString("gh_token", "") ?: "") }
     var ghOwner by remember { mutableStateOf(prefs.getString("gh_owner", "cengiz718") ?: "cengiz718") }
-    var ghRepo by remember { mutableStateOf(prefs.getString("gh_repo", "") ?: "") }
+    var ghRepo by remember { mutableStateOf(prefs.getString("gh_repo", "Kodlama") ?: "Kodlama") }
     var ghBranch by remember { mutableStateOf(prefs.getString("gh_branch", "main") ?: "main") }
-    var appTitle by remember { mutableStateOf("Yeni Uygulamam") }
+    var appTitle by remember { mutableStateOf("AI Studio Süper Stüdyo") }
     var deletePathInput by remember { mutableStateOf("") }
 
     var showSettings by remember { mutableStateOf(false) }
@@ -292,63 +467,75 @@ fun AiStudioApkScreen() {
     var previewVersion by remember { mutableIntStateOf(0) }
     var promptInput by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
+    var updateInfoUrl by remember { mutableStateOf<String?>(null) }
 
-    var liveHtmlCode by remember { mutableStateOf(BuiltInTemplates.ecommerceTemplate()) }
+    var liveHtmlCode by remember { mutableStateOf(BuiltInTemplates.mediaStudioTemplate()) }
 
     val messages = remember {
         mutableStateListOf(
             ChatMessage(
                 "assistant",
-                "AI Studio APK Üretici v7.0 hazır! Anahtarsız yapay zeka ile uygulama üret, 'Canlı Önizleme' sekmesinde test et ve tek tuşla GitHub'a yazıp APK + Release olarak derlet."
+                "AI Studio Süper Stüdyo v" + CURRENT_APP_VERSION + " hazır! Görsel üretici, müzik/video oynatıcı, not defteri, şablonlar ve otomatik güncelleme denetleyicisi eklendi."
             )
         )
     }
 
+    LaunchedEffect(Unit) {
+        val status = checkAppUpdateFromGitHub(ghOwner.trim().ifBlank { "cengiz718" }, ghRepo.trim().ifBlank { "Kodlama" })
+        if (status.downloadUrl != null) {
+            updateInfoUrl = status.downloadUrl
+            messages.add(ChatMessage("assistant", status.message))
+        }
+    }
+
     Scaffold(
         topBar = {
-            Column(modifier = Modifier.background(Color(0xFF1E293B))) {
+            Column(
+                modifier = Modifier.background(
+                    Brush.horizontalGradient(listOf(Color(0xFF1E1B4B), Color(0xFF0F172A), Color(0xFF1E293B)))
+                )
+            ) {
                 TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                     title = {
                         Column {
-                            Text("AI Studio APK Üretici", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                            Text("AI Studio Süper Stüdyo", fontWeight = FontWeight.Bold, fontSize = 17.sp, color = Color.White)
                             Text(
-                                if (ghRepo.isNotBlank()) "Anahtarsız AI • " + ghOwner + "/" + ghRepo else "Anahtarsız AI • Canlı Önizleme",
+                                "v" + CURRENT_APP_VERSION + " • " + ghOwner + "/" + ghRepo,
                                 fontSize = 11.sp,
-                                color = Color(0xFF94A3B8)
+                                color = Color(0xFF7DD3FC)
                             )
                         }
                     },
                     actions = {
                         IconButton(onClick = {
-                            if (ghToken.isBlank() || ghRepo.isBlank() || isLoading) {
-                                showSettings = true
-                                return@IconButton
-                            }
+                            if (isLoading) return@IconButton
                             isLoading = true
                             scope.launch {
-                                val status = checkLatestRelease(ghToken.trim(), ghOwner.trim(), ghRepo.trim())
-                                messages.add(ChatMessage("assistant", status))
+                                val res = checkAppUpdateFromGitHub(ghOwner.trim().ifBlank { "cengiz718" }, ghRepo.trim().ifBlank { "Kodlama" })
+                                updateInfoUrl = res.downloadUrl
+                                messages.add(ChatMessage("assistant", res.message))
                                 activeTab = 0
                                 isLoading = false
                             }
                         }) {
-                            Icon(Icons.Default.Build, contentDescription = "APK Durumu")
+                            Icon(Icons.Default.SystemUpdate, contentDescription = "Güncelleme Kontrolü", tint = Color(0xFF38BDF8))
                         }
                         IconButton(onClick = { showSettings = !showSettings }) {
-                            Icon(Icons.Default.Settings, contentDescription = "Ayarlar")
+                            Icon(Icons.Default.Settings, contentDescription = "Ayarlar", tint = Color.White)
                         }
                     }
                 )
                 TabRow(
                     selectedTabIndex = activeTab,
-                    containerColor = Color(0xFF1E293B),
+                    containerColor = Color(0xFF131B2E),
                     contentColor = Color(0xFF38BDF8)
                 ) {
                     Tab(
                         selected = activeTab == 0,
                         onClick = { activeTab = 0 },
-                        text = { Text("Şablon & Sohbet") },
-                        icon = { Icon(Icons.Default.Code, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                        text = { Text("Stüdyo & Sohbet") },
+                        icon = { Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp)) }
                     )
                     Tab(
                         selected = activeTab == 1,
@@ -364,17 +551,45 @@ fun AiStudioApkScreen() {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .background(Color(0xFF0F172A))
+                .background(Brush.verticalGradient(listOf(Color(0xFF090D16), Color(0xFF0F172A))))
         ) {
+            if (updateInfoUrl != null) {
+                Surface(
+                    color = Color(0xFF1D4ED8),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Yeni sürüm / APK hazır!", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Button(
+                            onClick = {
+                                updateInfoUrl?.let { u ->
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u)))
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFF1E3A8A)),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+                        ) {
+                            Text("Güncellemeyi İndir", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+
             if (showSettings) {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(10.dp),
+                    shape = RoundedCornerShape(16px.dp),
+                    border = BorderStroke(1.dp, Color(0xFF334155)),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B))
                 ) {
                     Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("GitHub Otomasyon Ayarları", fontWeight = FontWeight.Bold, color = Color.White)
+                        Text("GitHub ve Paket Ayarları", fontWeight = FontWeight.Bold, color = Color.White)
 
                         OutlinedTextField(
                             value = appTitle,
@@ -468,7 +683,7 @@ fun AiStudioApkScreen() {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(Color(0xFF1E293B))
+                            .background(Color(0xFF131B2E))
                             .padding(horizontal = 10.dp, vertical = 6.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
@@ -494,7 +709,7 @@ fun AiStudioApkScreen() {
                                         ghOwner.trim(),
                                         ghRepo.trim(),
                                         ghBranch.trim(),
-                                        appTitle.trim().ifBlank { "Uygulamam" },
+                                        appTitle.trim().ifBlank { "AI Studio Süper Stüdyo" },
                                         liveHtmlCode
                                     )
                                     messages.add(ChatMessage("assistant", report))
@@ -515,6 +730,7 @@ fun AiStudioApkScreen() {
                                 settings.javaScriptEnabled = true
                                 settings.domStorageEnabled = true
                                 settings.allowFileAccess = true
+                                settings.mediaPlaybackRequiresUserGesture = false
                                 addJavascriptInterface(NativeBridge(ctx), "AndroidBridge")
                                 webViewClient = WebViewClient()
                                 webChromeClient = WebChromeClient()
@@ -536,10 +752,19 @@ fun AiStudioApkScreen() {
                     modifier = Modifier
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState())
-                        .background(Color(0xFF162032))
+                        .background(Color(0xFF111827))
                         .padding(horizontal = 10.dp, vertical = 6.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
+                    SuggestionChip(
+                        onClick = {
+                            liveHtmlCode = BuiltInTemplates.mediaStudioTemplate()
+                            appTitle = "Görsel & Medya Stüdyo"
+                            previewVersion++
+                            activeTab = 1
+                        },
+                        label = { Text("Görsel & Medya", fontSize = 11.sp) }
+                    )
                     SuggestionChip(
                         onClick = {
                             liveHtmlCode = BuiltInTemplates.ecommerceTemplate()
@@ -580,9 +805,10 @@ fun AiStudioApkScreen() {
                         val isUser = msg.role == "user"
                         Card(
                             colors = CardDefaults.cardColors(
-                                containerColor = if (isUser) Color(0xFF2563EB) else Color(0xFF1E293B)
+                                containerColor = if (isUser) Color(0xFF2563EB) else Color(0xFF131B2E)
                             ),
-                            shape = RoundedCornerShape(14.dp),
+                            border = BorderStroke(1.dp, if (isUser) Color(0xFF60A5FA) else Color(0xFF273552)),
+                            shape = RoundedCornerShape(16.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(modifier = Modifier.padding(12.dp)) {
@@ -637,7 +863,7 @@ fun AiStudioApkScreen() {
                                                         ghOwner.trim(),
                                                         ghRepo.trim(),
                                                         ghBranch.trim(),
-                                                        appTitle.trim().ifBlank { "Uygulamam" },
+                                                        appTitle.trim().ifBlank { "AI Studio Süper Stüdyo" },
                                                         sanitizeAndExtractHtml(msg.content)
                                                     )
                                                     messages.add(ChatMessage("assistant", report))
@@ -675,7 +901,7 @@ fun AiStudioApkScreen() {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFF1E293B))
+                    .background(Color(0xFF131B2E))
                     .padding(10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -719,7 +945,10 @@ fun AiStudioApkScreen() {
                             isLoading = false
                         }
                     },
-                    modifier = Modifier.background(Color(0xFF2563EB), RoundedCornerShape(12.dp))
+                    modifier = Modifier.background(
+                        Brush.horizontalGradient(listOf(Color(0xFF2563EB), Color(0xFF7C3AED))),
+                        RoundedCornerShape(14.dp)
+                    )
                 ) {
                     Icon(Icons.Default.Send, contentDescription = "Üret", tint = Color.White)
                 }
@@ -727,6 +956,45 @@ fun AiStudioApkScreen() {
         }
     }
 }
+
+data class UpdateCheckResult(val message: String, val downloadUrl: String?)
+
+suspend fun checkAppUpdateFromGitHub(owner: String, repo: String): UpdateCheckResult =
+    withContext(Dispatchers.IO) {
+        val client = OkHttpClient.Builder()
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .build()
+        try {
+            val req = Request.Builder()
+                .url("https://api.github.com/repos/" + owner + "/" + repo + "/releases/latest")
+                .addHeader("Accept", "application/vnd.github+json")
+                .build()
+            client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) {
+                    return@withContext UpdateCheckResult(
+                        "Güncelleme sayfası: https://github.com/" + owner + "/" + repo + "/releases",
+                        "https://github.com/" + owner + "/" + repo + "/releases"
+                    )
+                }
+                val obj = JSONObject(resp.body?.string() ?: "{}")
+                val tag = obj.optString("tag_name", "")
+                val htmlUrl = obj.optString("html_url", "https://github.com/" + owner + "/" + repo + "/releases")
+                var apkUrl = htmlUrl
+                val assets = obj.optJSONArray("assets")
+                if (assets != null && assets.length() > 0) {
+                    val dl = assets.getJSONObject(0).optString("browser_download_url", "")
+                    if (dl.isNotBlank()) apkUrl = dl
+                }
+                UpdateCheckResult(
+                    "Mevcut sürüm: v" + CURRENT_APP_VERSION + " • Son Release: " + tag + "\nİndirme: " + apkUrl,
+                    apkUrl
+                )
+            }
+        } catch (e: Exception) {
+            UpdateCheckResult("Güncelleme kontrolü yapılamadı: " + e.message, null)
+        }
+    }
 
 fun sanitizeAndExtractHtml(raw: String): String {
     val fenceRegex = Regex("```(?:html)?\\s*([\\s\\S]*?)```", RegexOption.IGNORE_CASE)
@@ -924,31 +1192,5 @@ suspend fun deleteFileFromGitHub(
     client.newCall(req).execute().use { resp ->
         if (resp.isSuccessful) "Silindi: " + cleanPath
         else "Silme hatası (" + resp.code + "): " + (resp.body?.string() ?: "")
-    }
-}
-
-suspend fun checkLatestRelease(
-    token: String,
-    owner: String,
-    repo: String
-): String = withContext(Dispatchers.IO) {
-    val client = ghClient()
-    val runsReq = Request.Builder()
-        .url("https://api.github.com/repos/" + owner + "/" + repo + "/actions/runs?per_page=1")
-        .addHeader("Authorization", "Bearer " + token)
-        .addHeader("Accept", "application/vnd.github+json")
-        .build()
-
-    client.newCall(runsReq).execute().use { resp ->
-        val body = resp.body?.string() ?: ""
-        if (!resp.isSuccessful) return@withContext "İş akışı okunamadı (" + resp.code + "): " + body
-        val runs = JSONObject(body).optJSONArray("workflow_runs")
-        if (runs == null || runs.length() == 0) {
-            return@withContext "Henüz derleme kaydı yok: https://github.com/" + owner + "/" + repo + "/actions"
-        }
-        val latest = runs.getJSONObject(0)
-        val status = latest.optString("status", "unknown")
-        val conclusion = latest.optString("conclusion", "-")
-        "Son Derleme: " + status + " (" + conclusion + ")\nReleases: https://github.com/" + owner + "/" + repo + "/releases\nActions: " + latest.optString("html_url", "")
     }
 }
