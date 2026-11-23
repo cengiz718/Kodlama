@@ -44,7 +44,6 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
@@ -1030,25 +1029,14 @@ suspend fun callLivePreviewAi(userPrompt: String, currentHtml: String): String =
             .build()
 
         try {
-            val jsonBody = JSONObject().apply {
-                put("model", "openai")
-                put("temperature", 0.25.toDouble())
-                put("messages", JSONArray().apply {
-                    put(JSONObject().apply {
-                        put("role", "system")
-                        put("content", systemPrompt)
-                    })
-                    put(JSONObject().apply {
-                        put("role", "user")
-                        put("content", userMessage)
-                    })
-                })
-            }
+            val escapedSystem = JSONObject.quote(systemPrompt)
+            val escapedUser = JSONObject.quote(userMessage)
+            val rawJson = """{"model":"openai","temperature":0.25,"messages":[{"role":"system","content":$escapedSystem},{"role":"user","content":$escapedUser}]}"""
 
             val req = Request.Builder()
                 .url("https://text.pollinations.ai/openai")
                 .addHeader("Content-Type", "application/json")
-                .post(jsonBody.toString().toRequestBody("application/json".toMediaType()))
+                .post(rawJson.toRequestBody("application/json".toMediaType()))
                 .build()
 
             client.newCall(req).execute().use { resp ->
